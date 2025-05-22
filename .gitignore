@@ -1,2 +1,18 @@
+# Ignore Flask backend sensitive files and Python build artifacts
 plaid-flask/.env
 plaid-flask/.venv/
+plaid-flask/__pycache__/
+plaid-flask/*.pyc
+plaid-flask/*.pyo
+plaid-flask/*.log
+
+# macOS system files
+.DS_Store
+
+# VSCode settings (optional)
+.vscode/
+
+# Xcode derived data and personal user settings
+*.xcuserstate
+*.xcuserdata/
+DerivedData/
