@@ -94,7 +94,7 @@ class AccountsViewController: UIViewController {
           request.setValue("application/json", forHTTPHeaderField: "Content-Type")
           request.httpBody = try? JSONSerialization.data(withJSONObject: [:])// converts empty swift dict into json data
 
-          URLSession.shared.dataTask(with: request) { data, response, error in
+          URLSession.shared.dataTask(with: request) { data, response, error in //HTTP call
               if let error = error {
                   print("Network error:", error)
                   return
