@@ -8,16 +8,18 @@
 import UIKit
 
 class FloatingActionButton: UIButton {
-  override init(frame: CGRect) {
+  override init(frame: CGRect) {// this initializer means that the button is created in code
     super.init(frame: frame)
     setupStyle()
   }
-  required init?(coder: NSCoder) { fatalError() }
+  required init?(coder: NSCoder) { fatalError() } // this means that the button is used only programmatically not via storyboard
 
   private func setupStyle() {
-    backgroundColor = .black
+    backgroundColor = .black // black button with white plus
     tintColor = .white
-    setImage(UIImage(systemName: "plus"), for: .normal)
+    let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .bold)
+    let plusImage = UIImage(systemName: "plus", withConfiguration: config)
+    setImage(plusImage, for: .normal)
     layer.cornerRadius = 28    // half of width/height
     layer.shadowColor = UIColor.black.cgColor
     layer.shadowOpacity = 0.2

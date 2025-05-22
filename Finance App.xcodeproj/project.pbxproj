@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		41C5E7C22DD6E6C1005392C0 /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 41C5E7C12DD6E6C1005392C0 /* LinkKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		41C5E7412DB49EA3005392C0 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -65,6 +69,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				41C5E7C22DD6E6C1005392C0 /* LinkKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -125,6 +130,7 @@
 			);
 			name = "Finance App";
 			packageProductDependencies = (
+				41C5E7C12DD6E6C1005392C0 /* LinkKit */,
 			);
 			productName = "Finance App";
 			productReference = 41C5E72A2DB49EA1005392C0 /* Finance App.app */;
@@ -208,6 +214,9 @@
 			);
 			mainGroup = 41C5E7212DB49EA1005392C0;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				41C5E7C02DD6E6C1005392C0 /* XCRemoteSwiftPackageReference "plaid-link-ios" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 41C5E72B2DB49EA1005392C0 /* Products */;
 			projectDirPath = "";
@@ -567,6 +576,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		41C5E7C02DD6E6C1005392C0 /* XCRemoteSwiftPackageReference "plaid-link-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/plaid/plaid-link-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		41C5E7C12DD6E6C1005392C0 /* LinkKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 41C5E7C02DD6E6C1005392C0 /* XCRemoteSwiftPackageReference "plaid-link-ios" */;
+			productName = LinkKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 41C5E7222DB49EA1005392C0 /* Project object */;
 }
