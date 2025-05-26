@@ -6,30 +6,67 @@
 //
 
 import Foundation
+
 class DataService {
-  static func loadSummaries() -> [AccountSummary] {
-    return [
-      AccountSummary(
-        periodTitle: "Spent Today",
-        amount: 64.30,
-        percentage: -11,
-        subtitle: "Yesterday $72.50",
-        usesPieIcon: false
-      ),
-      AccountSummary(
-        periodTitle: "Spent This Week",
-        amount: 410.60,
-        percentage: -18,
-        subtitle: "Last Week $498.00",
-        usesPieIcon: false
-      ),
-      AccountSummary(
-        periodTitle: "Spent This Month",
-        amount: 1025.90,
-        percentage: 41,
-        subtitle: "Last Month $2,045.00",
-        usesPieIcon: true
-      )
-    ]
-  }
+    static func loadSummariesFromBackend(
+        accessToken: String,//require for authentication
+        completion: @escaping ([AccountSummary]) -> Void//returns an array of AccountSummary
+    ) {
+        let urlString = "http://192.168.0.87:5050/summaries?access_token=\(accessToken)"//build an URL with accessToken
+        guard let url = URL(string: urlString) else {//check if the url is valid or else
+            return completion([])//return empty result
+        }
+        
+        URLSession.shared.dataTask(with: url) { data, response, error in //starts an asynchronus http request
+            // 1) catches network error
+            if let error = error {
+                return DispatchQueue.main.async { completion([]) }//if nil return empty array
+            }
+            // 2) Data check
+            guard let data = data else {
+                return DispatchQueue.main.async { completion([]) }//if nil return empty array
+            }
+            // 3) Decode the JSON resposne to SummariesResponse Model
+            do {
+                let wrapper = try JSONDecoder().decode(SummariesResponse.self, from: data)
+                DispatchQueue.main.async {
+                    completion(wrapper.summaries)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion([])
+                }
+            }
+        }
+        .resume()
+    }
+    static func loadTransactions(// same as above - loadSummariesFromBackend
+        accessToken: String,
+        period: String,                       // “today” / “week” / “month”
+        completion: @escaping ([Transaction]) -> Void //return an array of transaction
+    ) {
+        let urlString = "http://192.168.0.87:5050/transactions?access_token=\(accessToken)&period=\(period)"
+        guard let url = URL(string: urlString) else {
+            return DispatchQueue.main.async { completion([]) }
+        }
+        
+        URLSession.shared.dataTask(with: url) { data, _, error in
+            if let error = error {
+                return DispatchQueue.main.async { completion([]) }
+            }
+            guard let data = data else {
+                return DispatchQueue.main.async { completion([]) }
+            }
+            do {
+                let resp = try JSONDecoder().decode(TransactionsResponse.self, from: data)
+                DispatchQueue.main.async { completion(resp.transactions) }
+            } catch {
+                DispatchQueue.main.async { completion([]) }
+            }
+        }
+        .resume()
+    }
 }
+
+
+
