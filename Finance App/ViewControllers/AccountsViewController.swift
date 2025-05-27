@@ -22,7 +22,7 @@ class AccountsViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
-        title = "My Accounts"
+        navigationItem.title = "My Accounts"
         
         setupScrollStack()
         setupFloatingButton()
@@ -204,7 +204,7 @@ class AccountsViewController: UIViewController {
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         
         URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
+            if error != nil {
                 return
             }
         }.resume()
@@ -228,6 +228,6 @@ class AccountsViewController: UIViewController {
 //User taps FAB → fabTapped()
 //App sends a POST request to /create_link_token on your Flask backend
 //Flask responds with a link_token → used to launch Plaid Link UI
-//User completes bank authentication → Plaid returns a public_token
+//User completes bank connection → get public_token
 //POST public_token to your Flask /exchange_public_token
 //Receive access_token → use it to fetch real data (accounts, transactions)

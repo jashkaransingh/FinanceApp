@@ -21,6 +21,7 @@ class TransactionCellView: UITableViewCell {
         detailLabel.font = .systemFont(ofSize: 14, weight: .regular)//smaller and lighter for detail
         detailLabel.textColor = .secondaryLabel
         detailLabel.numberOfLines = 2//how many lines of detailed label is allowed
+        accessoryType = .disclosureIndicator
         
 //      stack the labels vertically
         let stack = UIStackView(arrangedSubviews: [nameLabel, detailLabel])

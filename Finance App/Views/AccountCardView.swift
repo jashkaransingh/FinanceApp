@@ -15,11 +15,13 @@ class AccountCardView: UIView {
     private let trendIcon = UIImageView()
     private let trendLabel = UILabel()
     private let subtitleLabel = UILabel()
+    private let chevronIcon = UIImageView()
+
     
     // MARK: Init
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = .systemBackground
+        backgroundColor = .secondarySystemGroupedBackground
         layer.cornerRadius = 12
         layer.shadowColor = UIColor.black.cgColor
         layer.shadowOpacity = 0.05
@@ -36,16 +38,19 @@ class AccountCardView: UIView {
         titleLabel.text = model.periodTitle
         amountLabel.text = String(format: "$%.2f", model.amount)
         subtitleLabel.text = model.subtitle//subtitle - yesterday, lastweek
+        chevronIcon.image = UIImage(systemName: "chevron.right")
+        chevronIcon.tintColor = .tertiaryLabel
+        
         
         if model.usesPieIcon {
             trendIcon.image = UIImage(systemName: "chart.pie.fill")
             trendLabel.isHidden = true
-            trendIcon.tintColor = .black
+            trendIcon.tintColor = .label
         } else {
             //    right now the percentage is hardcoded but "WILL HAVE TO DYNAMICALLY CALCULATE IT"
-            let arrowName = model.percentage < 0 ? "arrow.down" : "arrow.up" //if the spending is less then arrow down else arrow up
+            let arrowName = model.percentage < 0 ? "arrow.up.circle.fill" : "arrow.down.circle.fill" //if the spending is less then arrow down else arrow up
             trendIcon.image = UIImage(systemName: arrowName)?.withRenderingMode(.alwaysTemplate)
-            trendIcon.tintColor = .black
+            trendIcon.tintColor = .label
             trendLabel.text = "\(abs(model.percentage))%"
             trendLabel.isHidden = false
         }
@@ -53,7 +58,7 @@ class AccountCardView: UIView {
 
     // MARK: Layout
     private func setupSubviews() {
-        [titleLabel, amountLabel, trendIcon, trendLabel, subtitleLabel]
+        [titleLabel, amountLabel, trendIcon, trendLabel, subtitleLabel, chevronIcon]
             .forEach { addSubview($0); $0.translatesAutoresizingMaskIntoConstraints = false }
         titleLabel.font    = .systemFont(ofSize: 16, weight: .medium)
         amountLabel.font   = .systemFont(ofSize: 32, weight: .bold)
@@ -72,15 +77,20 @@ class AccountCardView: UIView {
             
             trendIcon.centerYAnchor.constraint(equalTo: amountLabel.centerYAnchor),
             trendIcon.leadingAnchor.constraint(equalTo: amountLabel.trailingAnchor, constant: 8),
-            trendIcon.widthAnchor.constraint(equalToConstant: 16),
-            trendIcon.heightAnchor.constraint(equalToConstant: 16),
+            trendIcon.widthAnchor.constraint(equalToConstant: 20),
+            trendIcon.heightAnchor.constraint(equalToConstant: 20),
             
             trendLabel.centerYAnchor.constraint(equalTo: amountLabel.centerYAnchor),
             trendLabel.leadingAnchor.constraint(equalTo: trendIcon.trailingAnchor, constant: 4),
             
             subtitleLabel.topAnchor.constraint(equalTo: amountLabel.bottomAnchor, constant: 4),
             subtitleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            subtitleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12)
+            subtitleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+            
+            chevronIcon.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            chevronIcon.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            chevronIcon.widthAnchor.constraint(equalToConstant: 12),
+            chevronIcon.heightAnchor.constraint(equalToConstant: 20),
         ])
     }
 }

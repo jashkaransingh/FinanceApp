@@ -11,7 +11,7 @@ class HistoryViewController: UIViewController {
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .systemBackground
-    title = "History"
+      navigationItem.title = "History"
 
     // TODO: Show a list of past transactions.
     // Probably a UITableView with custom cells.

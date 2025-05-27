@@ -15,8 +15,8 @@ class FloatingActionButton: UIButton {
   required init?(coder: NSCoder) { fatalError() } // this means that the button is used only programmatically not via storyboard
 
   private func setupStyle() {
-    backgroundColor = .black // black button with white plus
-    tintColor = .white
+      backgroundColor = .label // black button with white plus
+    tintColor = .systemBackground
     let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .bold)
     let plusImage = UIImage(systemName: "plus", withConfiguration: config)
     setImage(plusImage, for: .normal)
