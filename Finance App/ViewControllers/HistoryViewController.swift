@@ -12,8 +12,24 @@ class HistoryViewController: UIViewController {
     super.viewDidLoad()
     view.backgroundColor = .systemBackground
       navigationItem.title = "History"
-
-    // TODO: Show a list of past transactions.
-    // Probably a UITableView with custom cells.
+      
+      navigationItem.rightBarButtonItem = UIBarButtonItem(
+              title: "Sign Out",
+              style: .plain,
+              target: self,
+              action: #selector(signOutTapped)
+          )
+      
   }
+    @objc private func signOutTapped() {
+        let alert = UIAlertController(title: "Sign Out?", message: nil, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Sign Out", style: .destructive) { _ in
+            AuthService.signOut()
+            SceneDelegate.switchToLogin()
+        })
+        present(alert, animated: true)
+
+    }
+
 }

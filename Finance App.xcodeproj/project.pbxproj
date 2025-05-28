@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		413EA1D92DE56CDC00545123 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 413EA1D82DE56CDC00545123 /* FirebaseAuth */; };
+		413EA1DB2DE56CDC00545123 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 413EA1DA2DE56CDC00545123 /* FirebaseCore */; };
+		413EA2142DE6A9DD00545123 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 413EA2132DE6A9DD00545123 /* FirebaseFirestore */; };
 		41C5E7C22DD6E6C1005392C0 /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 41C5E7C12DD6E6C1005392C0 /* LinkKit */; };
 /* End PBXBuildFile section */
 
@@ -70,6 +73,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				41C5E7C22DD6E6C1005392C0 /* LinkKit in Frameworks */,
+				413EA2142DE6A9DD00545123 /* FirebaseFirestore in Frameworks */,
+				413EA1DB2DE56CDC00545123 /* FirebaseCore in Frameworks */,
+				413EA1D92DE56CDC00545123 /* FirebaseAuth in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -131,6 +137,9 @@
 			name = "Finance App";
 			packageProductDependencies = (
 				41C5E7C12DD6E6C1005392C0 /* LinkKit */,
+				413EA1D82DE56CDC00545123 /* FirebaseAuth */,
+				413EA1DA2DE56CDC00545123 /* FirebaseCore */,
+				413EA2132DE6A9DD00545123 /* FirebaseFirestore */,
 			);
 			productName = "Finance App";
 			productReference = 41C5E72A2DB49EA1005392C0 /* Finance App.app */;
@@ -216,6 +225,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				41C5E7C02DD6E6C1005392C0 /* XCRemoteSwiftPackageReference "plaid-link-ios" */,
+				413EA1D72DE56CDC00545123 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 41C5E72B2DB49EA1005392C0 /* Products */;
@@ -578,6 +588,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		413EA1D72DE56CDC00545123 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.13.0;
+			};
+		};
 		41C5E7C02DD6E6C1005392C0 /* XCRemoteSwiftPackageReference "plaid-link-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/plaid/plaid-link-ios";
@@ -589,6 +607,21 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		413EA1D82DE56CDC00545123 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 413EA1D72DE56CDC00545123 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		413EA1DA2DE56CDC00545123 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 413EA1D72DE56CDC00545123 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		413EA2132DE6A9DD00545123 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 413EA1D72DE56CDC00545123 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
 		41C5E7C12DD6E6C1005392C0 /* LinkKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 41C5E7C02DD6E6C1005392C0 /* XCRemoteSwiftPackageReference "plaid-link-ios" */;

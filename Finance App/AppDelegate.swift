@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import FirebaseCore
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -18,6 +19,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         ) -> Bool {
           // You can configure global appearance here:
           UINavigationBar.appearance().prefersLargeTitles = true
+            FirebaseApp.configure()
           return true
         }
 

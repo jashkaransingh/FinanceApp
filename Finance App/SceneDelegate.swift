@@ -17,24 +17,57 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // If using a storyboard, the `window` property will automatically be initialized and attached to the scene.
         // This delegate does not imply the connecting scene or session are new (see `application:configurationForConnectingSceneSession` instead).
         guard let windowScene = (scene as? UIWindowScene) else { return }
-        let accountsVC = AccountsViewController()
-            let nav1 = UINavigationController(rootViewController: accountsVC)
-            nav1.tabBarItem = UITabBarItem(title: nil, image: UIImage(systemName: "creditcard.fill"), tag: 0)
-
-            let historyVC = HistoryViewController()
-            let nav2 = UINavigationController(rootViewController: historyVC)
-            nav2.tabBarItem = UITabBarItem(title: nil, image: UIImage(systemName: "clock"), tag: 1)
-
-            let tabBar = UITabBarController()
-            tabBar.viewControllers = [nav1, nav2]
-        tabBar.tabBar.tintColor = .label  // Your brand color
-        tabBar.tabBar.unselectedItemTintColor = .secondaryLabel
-
+            
             window = UIWindow(windowScene: windowScene)
-            window?.rootViewController = tabBar
+
+            if AuthService.isSignedIn() {
+                SceneDelegate.switchToMainApp()
+            } else {
+                let loginVC = LoginViewController()
+                let nav = UINavigationController(rootViewController: loginVC)
+                window?.rootViewController = nav
+            }
+
             window?.makeKeyAndVisible()
           }
     
+    static func switchToMainApp() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let delegate = windowScene.delegate as? SceneDelegate,
+              let window = delegate.window else { return }
+
+        let accountsVC = AccountsViewController()
+        let nav1 = UINavigationController(rootViewController: accountsVC)
+        nav1.tabBarItem = UITabBarItem(title: nil, image: UIImage(systemName: "creditcard.fill"), tag: 0)
+
+        let historyVC = HistoryViewController()
+        let nav2 = UINavigationController(rootViewController: historyVC)
+        nav2.tabBarItem = UITabBarItem(title: nil, image: UIImage(systemName: "clock"), tag: 1)
+
+        let tabBar = UITabBarController()
+        tabBar.viewControllers = [nav1, nav2]
+        tabBar.tabBar.tintColor = .label
+        tabBar.tabBar.unselectedItemTintColor = .secondaryLabel
+
+        UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve, animations: {
+            window.rootViewController = tabBar
+        })
+    }
+
+
+    static func switchToLogin() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                 let delegate = windowScene.delegate as? SceneDelegate,
+                 let window = delegate.window else { return }
+
+           let loginVC = LoginViewController()
+           let nav = UINavigationController(rootViewController: loginVC)
+
+           UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve, animations: {
+               window.rootViewController = nav
+           })
+    }
+
 
     func sceneDidDisconnect(_ scene: UIScene) {
         // Called as the scene is being released by the system.
