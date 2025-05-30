@@ -7,7 +7,7 @@
 
 import UIKit
 
-class AccountCardView: UIView {
+class AccountCardView: UIControl {
     var model: AccountSummary?
     // MARK: Subviews
     private let titleLabel = UILabel()
@@ -55,12 +55,31 @@ class AccountCardView: UIView {
             trendLabel.isHidden = false
         }
     }
+    
+    override var isHighlighted: Bool {
+      didSet {
+        // a quick scale‐down on touch‐down, then back to identity on release
+        let scale: CGFloat = isHighlighted ? 0.97 : 1.0
+        UIView.animate(
+          withDuration: 0.1,
+          delay: 0,
+          options: [.allowUserInteraction],
+          animations: {
+            self.transform = CGAffineTransform(scaleX: scale, y: scale)
+            // optionally dim the background slightly:
+            // self.alpha = isHighlighted ? 0.8 : 1.0
+          },
+          completion: nil
+        )
+      }
+    }
+
 
     // MARK: Layout
     private func setupSubviews() {
         [titleLabel, amountLabel, trendIcon, trendLabel, subtitleLabel, chevronIcon]
             .forEach { addSubview($0); $0.translatesAutoresizingMaskIntoConstraints = false }
-        titleLabel.font    = .systemFont(ofSize: 16, weight: .medium)
+        titleLabel.font    = .systemFont(ofSize: 18, weight: .medium)
         amountLabel.font   = .systemFont(ofSize: 32, weight: .bold)
         trendLabel.font    = .systemFont(ofSize: 16, weight: .regular)
         subtitleLabel.font = .systemFont(ofSize: 14, weight: .regular)

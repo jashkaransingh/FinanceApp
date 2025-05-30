@@ -10,52 +10,96 @@ import LinkKit
 
 
 class AccountsViewController: UIViewController {
+    // MARK: - Properties
+    private let headerView = TitleHeaderView()
+    private let scrollView = UIScrollView()// declared scroll view
+    private let stackView  = UIStackView()// declared stackView
+    private var summaries: [AccountSummary] = []
+    
     private var plaidLinkHandler: Handler?//retains the plaid handler after the launch
     private var accessToken: String? {//store accessToken to access throught the app
         get { UserDefaults.standard.string(forKey: "plaidAccessToken") }
         set { UserDefaults.standard.set(newValue, forKey: "plaidAccessToken") }
     }
-    private let scrollView = UIScrollView()// declared scroll view
-    private let stackView  = UIStackView()// declared stackView
-    private var summaries: [AccountSummary] = []
     
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
-        navigationItem.title = "My Accounts"
+        // Hide the stock nav bar so custom header can sit under the status bar
+        navigationController?.setNavigationBarHidden(true, animated: false)
         
+        configureHeader()
+        configureScrollView()
         setupScrollStack()
         setupFloatingButton()
         loadSummaries()
     }
     
-    private func setupScrollStack() {
-        //  Setting up the scrollView
-        view.addSubview(scrollView)
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
-        //  Setting up the stackView
-        stackView.axis = .vertical
-        stackView.spacing = 16 //spacing between the cards inside the stackview
-        stackView.layoutMargins = UIEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
-        stackView.isLayoutMarginsRelativeArrangement = true
-        
-        scrollView.addSubview(stackView)//add stackview in scrollview
-        //  Constraints
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            stackView.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor),
-            stackView.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor),
-            stackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
-        ])
+    override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            // Restore the nav bar for downstream VCs
+            navigationController?.setNavigationBarHidden(false, animated: animated)
+        }
+    override func viewWillAppear(_ animated: Bool) {
+      super.viewWillAppear(animated)
+      navigationController?.setNavigationBarHidden(true, animated: animated)
     }
+
+
+        // MARK: - Layout Helpers
+
+        private func configureHeader() {
+            view.addSubview(headerView)
+            headerView.translatesAutoresizingMaskIntoConstraints = false
+
+            NSLayoutConstraint.activate([
+                headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
+                headerView.leadingAnchor.constraint(equalTo: view.leadingAnchor,   constant: 16),
+                headerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+                headerView.heightAnchor.constraint(equalToConstant: 44) // match native nav-bar height
+            ])
+
+            headerView.onProfileTap = { [weak self] in
+                self?.openProfile()
+            }
+            
+            headerView.onDropdownTap = { 
+                // e.g. show your account‐picker dropdown
+                print("Header tapped – menu should open now")
+              }
+        }
+    
+    private func configureScrollView() {
+        view.addSubview(scrollView)
+          scrollView.translatesAutoresizingMaskIntoConstraints = false
+          NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+          ])
+        }
+
+        private func setupScrollStack() {
+            // 1) Configure the stack
+            stackView.axis = .vertical
+            stackView.spacing = 16
+            stackView.layoutMargins = .init(top: 16, left: 16, bottom: 16, right: 16)
+            stackView.isLayoutMarginsRelativeArrangement = true
+
+            // 2) Embed in scroll
+            scrollView.addSubview(stackView)
+            stackView.translatesAutoresizingMaskIntoConstraints = false
+
+            // 3) Pin edges & width
+            NSLayoutConstraint.activate([
+                stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+                stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+                stackView.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor),
+                stackView.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor),
+                stackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
+            ])
+        }
     
     private func populateCards() {
         summaries.forEach { model in//iterate through each item in summaries
@@ -64,16 +108,20 @@ class AccountsViewController: UIViewController {
             card.translatesAutoresizingMaskIntoConstraints = false
             card.heightAnchor.constraint(equalToConstant: 140).isActive = true
             //    Add tap gesture to the card
-            let tap = UITapGestureRecognizer(target: self, action: #selector(cardTapped(_:)))//add tap gesture
-            card.addGestureRecognizer(tap)
+            card.addTarget(self, action: #selector(cardTapped(_:)), for: .touchUpInside)//add tap gesture
             
             stackView.addArrangedSubview(card)//add the card to the stackView
         }
     }
     
-    @objc private func cardTapped(_ recognizer: UITapGestureRecognizer) {
+    @objc private func openProfile() {
+        let settingsVC = SettingsViewController()
+        navigationController?.pushViewController(settingsVC, animated: true)
+    }
+    
+    
+    @objc private func cardTapped(_ card: AccountCardView) {
         guard//unwrap these 3 items below
-            let card = recognizer.view as? AccountCardView,
             let model = card.model,
             let token = accessToken
         else { return }
