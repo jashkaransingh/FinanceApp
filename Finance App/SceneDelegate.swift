@@ -17,6 +17,25 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // If using a storyboard, the `window` property will automatically be initialized and attached to the scene.
         // This delegate does not imply the connecting scene or session are new (see `application:configurationForConnectingSceneSession` instead).
         guard let windowScene = (scene as? UIWindowScene) else { return }
+        
+        // 1) Create your window
+            let win = UIWindow(windowScene: windowScene)
+            window = win
+
+            // 2) Pull the saved dark–mode flag and apply it globally
+            let darkOn = UserDefaults.standard.bool(forKey: "darkModeEnabled")
+            win.overrideUserInterfaceStyle = darkOn ? .dark : .light
+
+            // 3) Now decide your root view controller
+            if AuthService.isSignedIn() {
+                SceneDelegate.switchToMainApp()
+            } else {
+                let loginVC = LoginViewController()
+                let nav = UINavigationController(rootViewController: loginVC)
+                win.rootViewController = nav
+            }
+
+            win.makeKeyAndVisible()
             
             window = UIWindow(windowScene: windowScene)
 

@@ -36,70 +36,70 @@ class AccountsViewController: UIViewController {
     }
     
     override func viewWillDisappear(_ animated: Bool) {
-            super.viewWillDisappear(animated)
-            // Restore the nav bar for downstream VCs
-            navigationController?.setNavigationBarHidden(false, animated: animated)
-        }
-    override func viewWillAppear(_ animated: Bool) {
-      super.viewWillAppear(animated)
-      navigationController?.setNavigationBarHidden(true, animated: animated)
+        super.viewWillDisappear(animated)
+        // Restore the nav bar for downstream VCs
+        navigationController?.setNavigationBarHidden(false, animated: animated)
     }
-
-
-        // MARK: - Layout Helpers
-
-        private func configureHeader() {
-            view.addSubview(headerView)
-            headerView.translatesAutoresizingMaskIntoConstraints = false
-
-            NSLayoutConstraint.activate([
-                headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
-                headerView.leadingAnchor.constraint(equalTo: view.leadingAnchor,   constant: 16),
-                headerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-                headerView.heightAnchor.constraint(equalToConstant: 44) // match native nav-bar height
-            ])
-
-            headerView.onProfileTap = { [weak self] in
-                self?.openProfile()
-            }
-            
-            headerView.onDropdownTap = { 
-                // e.g. show your account‐picker dropdown
-                print("Header tapped – menu should open now")
-              }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(true, animated: animated)
+    }
+    
+    
+    // MARK: - Layout Helpers
+    
+    private func configureHeader() {
+        view.addSubview(headerView)
+        headerView.translatesAutoresizingMaskIntoConstraints = false
+        
+        NSLayoutConstraint.activate([
+            headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
+            headerView.leadingAnchor.constraint(equalTo: view.leadingAnchor,   constant: 16),
+            headerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            headerView.heightAnchor.constraint(equalToConstant: 44) // match native nav-bar height
+        ])
+        
+        headerView.onProfileTap = { [weak self] in
+            self?.openProfile()
         }
+        
+        headerView.onDropdownTap = { 
+            // e.g. show your account‐picker dropdown
+            print("Header tapped – menu should open now")
+        }
+    }
     
     private func configureScrollView() {
         view.addSubview(scrollView)
-          scrollView.translatesAutoresizingMaskIntoConstraints = false
-          NSLayoutConstraint.activate([
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
-          ])
-        }
-
-        private func setupScrollStack() {
-            // 1) Configure the stack
-            stackView.axis = .vertical
-            stackView.spacing = 16
-            stackView.layoutMargins = .init(top: 16, left: 16, bottom: 16, right: 16)
-            stackView.isLayoutMarginsRelativeArrangement = true
-
-            // 2) Embed in scroll
-            scrollView.addSubview(stackView)
-            stackView.translatesAutoresizingMaskIntoConstraints = false
-
-            // 3) Pin edges & width
-            NSLayoutConstraint.activate([
-                stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-                stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-                stackView.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor),
-                stackView.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor),
-                stackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
-            ])
-        }
+        ])
+    }
+    
+    private func setupScrollStack() {
+        // 1) Configure the stack
+        stackView.axis = .vertical
+        stackView.spacing = 16
+        stackView.layoutMargins = .init(top: 16, left: 16, bottom: 16, right: 16)
+        stackView.isLayoutMarginsRelativeArrangement = true
+        
+        // 2) Embed in scroll
+        scrollView.addSubview(stackView)
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // 3) Pin edges & width
+        NSLayoutConstraint.activate([
+            stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            stackView.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor),
+            stackView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor)
+        ])
+    }
     
     private func populateCards() {
         summaries.forEach { model in//iterate through each item in summaries
@@ -159,116 +159,18 @@ class AccountsViewController: UIViewController {
     }
     
     //Add comment here
-    @objc private func fabTapped() {//@obj because it's called by a gesture or a button (FloatingActionButton)
-        //Build the URL for your backend’s create_link_token route
-        guard let url = URL(string: "http://192.168.0.87:5050/create_link_token")
-        else { return }
-        
-        //Create the POST request
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: [:])
-        
-        //Starts an asynchronous network call
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("Network error:", error)
-                return
+    @objc private func fabTapped() {
+        PlaidService.shared.startPlaidLink(
+            from: self,
+            onSuccess: { [weak self] in
+                // once linked, reload their summary cards
+                self?.loadSummaries()
+            },
+            onError: { error in
+                print("Plaid flow failed:", error)
+                // show an alert if you like
             }
-            if let http = response as? HTTPURLResponse {
-            }
-            guard let data = data,
-                  let bodyString = String(data: data, encoding: .utf8) else {
-                print("No data in response")
-                return
-            }
-            
-            //Parse the raw JSON response into a dictionary
-            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let linkToken = json["link_token"] as? String else {
-                print("JSON parse failed or missing link_token")
-                return
-            }
-            
-            //Back on the main thread, launch Plaid Link
-            DispatchQueue.main.async {
-                self.openPlaidLink(with: linkToken)
-            }
-        }
-        .resume()
-    }
-    private func openPlaidLink(with linkToken: String) {//this func launches the plaid UI using the tokens we got above
-        let config = LinkTokenConfiguration(token: linkToken) { linkSuccess in
-            let publicToken = linkSuccess.publicToken
-            self.sendPublicTokenToBackend(publicToken)//send public token to backend
-        }
-        
-        let result = Plaid.create(config)//plaid sdk return result - success or failure
-        
-        //handle only the success case and **retain** the handler
-        switch result {
-        case .success(let handler):
-            // store it in your property so it doesn’t go out of scope
-            self.plaidLinkHandler = handler
-            
-            // present on your view controller
-            handler.open(presentUsing: .viewController(self))
-            
-        case .failure(let error):
-            print("Plaid Link creation failed:", error)
-        }
-    }
-    
-    private func sendPublicTokenToBackend(_ publicToken: String) {//share the public token with backend for long live access on backend
-        guard let url = URL(string: "http://192.168.0.87:5050/exchange_public_token") else { return }
-        //      same step as fabTapped but now sending public token
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body = ["public_token": publicToken]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        //      Handle the response from backend
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if let data = data,
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let accessToken = json["access_token"] as? String {
-                self.accessToken = accessToken               // store it
-                self.loadSummaries()
-                self.fetchTransactions(accessToken: accessToken)
-            } else {
-                print("Failed to exchange token:", error ?? "Unknown error")
-            }
-        }.resume()
-    }
-    
-    func refreshTransactions(accessToken: String) {
-        guard let url = URL(string: "http://192.168.0.87:5050/refresh") else { return }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body = ["access_token": accessToken]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if error != nil {
-                return
-            }
-        }.resume()
-    }
-    
-    func fetchTransactions(accessToken: String) {
-        guard let url = URL(string: "http://192.168.0.87:5050/transactions?access_token=\(accessToken)") else { return }
-        
-        URLSession.shared.dataTask(with: url) { data, response, error in
-            if let data = data,
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let transactions = json["transactions"] as? [[String: Any]] {
-                print("Fetched transactions: \(transactions)")
-            } else {
-            }
-        }.resume()
+        )
     }
     
 }
