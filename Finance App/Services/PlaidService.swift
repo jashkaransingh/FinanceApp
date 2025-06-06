@@ -6,9 +6,10 @@
 //
 
 
-import Foundation
 import LinkKit
 import UIKit
+import FirebaseAuth
+import FirebaseFirestore
 
 /// A simple error type for Plaid failures
 enum PlaidError: Error {
@@ -27,7 +28,7 @@ final class PlaidService {
   private var linkHandler: Handler?
 
   // Your backend base URL
-  private let baseURL = URL(string: "http://192.168.0.87:5050")!
+    private let baseURL = URL(string: "http://localhost:5050")!
 
   /// 1️⃣ Create a link token
   func createLinkToken(completion: @escaping (Result<String, PlaidError>) -> Void) {
@@ -86,112 +87,137 @@ final class PlaidService {
     }
   }
 
-  /// 3️⃣ Exchange that public_token for a long-lived access_token
-  private func exchangePublicToken(_ publicToken: String,
-                                   completion: @escaping (Result<String, PlaidError>) -> Void)
-  {
-    let url = baseURL.appendingPathComponent("exchange_public_token")
-    var req = URLRequest(url: url)
-    req.httpMethod = "POST"
-    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    req.httpBody = try? JSONSerialization.data(withJSONObject: ["public_token": publicToken])
+    /// 3️⃣ Exchange that public_token for a long-lived access_token
+      ///     → As soon as we get `accessToken`, we write it into Firestore under `users/{uid}`.
+      private func exchangePublicToken(_ publicToken: String,
+                                       completion: @escaping (Result<String, PlaidError>) -> Void)
+      {
+        let url = baseURL.appendingPathComponent("exchange_public_token")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["public_token": publicToken])
 
-    URLSession.shared.dataTask(with: req) { data, _, err in
-      if let e = err { return completion(.failure(.network(e))) }
-      guard
-        let d = data,
-        let json = try? JSONSerialization.jsonObject(with: d) as? [String:Any],
-        let accessToken = json["access_token"] as? String
-      else { return completion(.failure(.parsing)) }
+        URLSession.shared.dataTask(with: req) { data, _, err in
+          if let e = err { return completion(.failure(.network(e))) }
+          guard
+            let d = data,
+            let json = try? JSONSerialization.jsonObject(with: d) as? [String:Any],
+            let accessToken = json["access_token"] as? String
+          else { return completion(.failure(.parsing)) }
 
-      // Persist for your app
-      UserDefaults.standard.set(accessToken, forKey: "plaidAccessToken")
-      completion(.success(accessToken))
-    }
-    .resume()
-  }
+          // ① Persist to UserDefaults (so your view controllers can read it immediately)
+          UserDefaults.standard.set(accessToken, forKey: "plaidAccessToken")
+
+          // ② ALSO write it into Firestore under this user’s document
+          if let uid = Auth.auth().currentUser?.uid {
+            let docRef = Firestore.firestore().collection("users").document(uid)
+            docRef.updateData([
+              "bankAccessToken": accessToken
+            ]) { error in
+              if let error = error {
+                print("🔥 Failed to save bankAccessToken in Firestore:", error)
+                // (You could call completion(.failure(.network(error))) if you want to treat
+                //  a Firestore‐write‐failure as a full failure. But usually we let the UI proceed
+                //  and “hope” Firestore works. Up to you.)
+              }
+              completion(.success(accessToken))
+            }
+          } else {
+            // No logged‐in user? Strange, but at least call success so the app can proceed.
+            completion(.success(accessToken))
+          }
+        }
+        .resume()
+      }
 
   /// 4️⃣ Optional: Remove (unlink) an Item
-  func removeItem(accessToken: String,
-                  completion: @escaping (Result<Bool, PlaidError>) -> Void)
-  {
-    let url = baseURL.appendingPathComponent("remove_item")
-    var req = URLRequest(url: url)
-    req.httpMethod = "POST"
-    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    req.httpBody = try? JSONSerialization.data(withJSONObject: ["access_token": accessToken])
-
-    URLSession.shared.dataTask(with: req) { data, _, err in
-      if let e = err { return completion(.failure(.network(e))) }
-      guard
-        let d = data,
-        let json = try? JSONSerialization.jsonObject(with: d) as? [String:Any],
-        let removed = json["removed"] as? Bool
-      else { return completion(.failure(.parsing)) }
-
-      if removed {
-        UserDefaults.standard.removeObject(forKey: "plaidAccessToken")
-      }
-      completion(.success(removed))
-    }
-    .resume()
-  }
-
-    // 4️⃣ Refresh (optional) – move your refreshTransactions here
-    func refreshTransactions(_ accessToken: String,
-                             completion: ((Result<Bool, PlaidError>) -> Void)? = nil)
+    func removeItem(accessToken: String,
+                    completion: @escaping (Result<Bool, PlaidError>) -> Void)
     {
-      let url = baseURL.appendingPathComponent("refresh")
+      guard let uid = Auth.auth().currentUser?.uid else {
+        return completion(.failure(.missingAccessToken))
+      }
+
+      let url = baseURL.appendingPathComponent("remove_item")
       var req = URLRequest(url: url)
       req.httpMethod = "POST"
       req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-      req.httpBody = try? JSONSerialization.data(withJSONObject: ["access_token": accessToken])
+
+      // Include both the Plaid token and the Firebase UID in the request body
+      let body: [String:Any] = [
+        "access_token": accessToken,
+        "uid": uid
+      ]
+      req.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
       URLSession.shared.dataTask(with: req) { data, _, err in
-        if let err = err {
-          completion?(.failure(.network(err)))
-        } else {
-          completion?(.success(true))
-        }
-      }.resume()
-    }
-
-    // 5️⃣ Fetch transactions – move your fetchTransactions here
-    func fetchTransactions(
-      _ accessToken: String,
-      completion: @escaping (Result<[[String:Any]], PlaidError>) -> Void
-    ) {
-      // 1) build a URLComponents from your base + path
-      var comps = URLComponents(
-        url: baseURL.appendingPathComponent("transactions"),
-        resolvingAgainstBaseURL: false
-      )!
-      
-      // 2) add the access_token query
-      comps.queryItems = [
-        URLQueryItem(name: "access_token", value: accessToken)
-      ]
-      
-      // 3) unwrap the resulting URL
-      guard let url = comps.url else {
-        return completion(.failure(.parsing))
-      }
-      
-      // 4) kick off the request as before
-      URLSession.shared.dataTask(with: url) { data, _, err in
         if let e = err { return completion(.failure(.network(e))) }
         guard
           let d = data,
           let json = try? JSONSerialization.jsonObject(with: d) as? [String:Any],
-          let txns = json["transactions"] as? [[String:Any]]
+          let removed = json["removed"] as? Bool
         else {
           return completion(.failure(.parsing))
         }
-        DispatchQueue.main.async { completion(.success(txns)) }
+
+        if removed {
+          // If removal succeeded (or was already removed), clear UserDefaults
+          UserDefaults.standard.removeObject(forKey: "plaidAccessToken")
+        }
+        completion(.success(removed))
       }
       .resume()
     }
 
 
-}
+    // 4️⃣ Refresh (optional) – unchanged
+      func refreshTransactions(_ accessToken: String,
+                               completion: ((Result<Bool, PlaidError>) -> Void)? = nil)
+      {
+        let url = baseURL.appendingPathComponent("refresh")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["access_token": accessToken])
+
+        URLSession.shared.dataTask(with: req) { data, _, err in
+          if let err = err {
+            completion?(.failure(.network(err)))
+          } else {
+            completion?(.success(true))
+          }
+        }.resume()
+      }
+
+      // 5️⃣ Fetch transactions – unchanged
+      func fetchTransactions(
+        _ accessToken: String,
+        completion: @escaping (Result<[[String:Any]], PlaidError>) -> Void
+      ) {
+        var comps = URLComponents(
+          url: baseURL.appendingPathComponent("transactions"),
+          resolvingAgainstBaseURL: false
+        )!
+        comps.queryItems = [
+          URLQueryItem(name: "access_token", value: accessToken)
+        ]
+        guard let url = comps.url else {
+          return completion(.failure(.parsing))
+        }
+
+        URLSession.shared.dataTask(with: url) { data, _, err in
+          if let e = err { return completion(.failure(.network(e))) }
+          guard
+            let d = data,
+            let json = try? JSONSerialization.jsonObject(with: d) as? [String:Any],
+            let txns = json["transactions"] as? [[String:Any]]
+          else {
+            return completion(.failure(.parsing))
+          }
+          DispatchQueue.main.async { completion(.success(txns)) }
+        }
+        .resume()
+      }
+    }
 

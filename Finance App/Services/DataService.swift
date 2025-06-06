@@ -12,7 +12,9 @@ class DataService {
         accessToken: String,//require for authentication
         completion: @escaping ([AccountSummary]) -> Void//returns an array of AccountSummary
     ) {
-        let urlString = "http://192.168.0.87:5050/summaries?access_token=\(accessToken)"//build an URL with accessToken
+        let urlString = "http://localhost:5050/summaries?access_token=\(accessToken)"
+//        let urlString = "http://192.168.0.87:5050/summaries?access_token=\(accessToken)"
+        //build an URL with accessToken
         guard let url = URL(string: urlString) else {//check if the url is valid or else
             return completion([])//return empty result
         }
@@ -66,6 +68,39 @@ class DataService {
         }
         .resume()
     }
+    static func loadTransactionsBetween(
+            accessToken: String,
+            startDate: String,
+            endDate: String,
+            completion: @escaping ([Transaction]) -> Void
+        ) {
+            // Build URLComponents for GET /transactions?access_token=…&start_date=…&end_date=…
+            var comps = URLComponents(string: "http://192.168.0.87:5050/transactions")!
+            comps.queryItems = [
+                URLQueryItem(name: "access_token", value: accessToken),
+                URLQueryItem(name: "start_date", value: startDate),
+                URLQueryItem(name: "end_date", value: endDate)
+            ]
+            guard let url = comps.url else {
+                return DispatchQueue.main.async { completion([]) }
+            }
+
+            URLSession.shared.dataTask(with: url) { data, _, error in
+                if let _ = error {
+                    return DispatchQueue.main.async { completion([]) }
+                }
+                guard let data = data else {
+                    return DispatchQueue.main.async { completion([]) }
+                }
+                do {
+                    let resp = try JSONDecoder().decode(TransactionsResponse.self, from: data)
+                    DispatchQueue.main.async { completion(resp.transactions) }
+                } catch {
+                    DispatchQueue.main.async { completion([]) }
+                }
+            }
+            .resume()
+        }
 }
 
 
