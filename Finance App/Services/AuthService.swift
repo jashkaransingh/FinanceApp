@@ -41,8 +41,13 @@ class AuthService {
 
 
     static func signOut() {
-        try? Auth.auth().signOut()
+      // 1) Sign out of Firebase:
+      try? Auth.auth().signOut()
+      
+      // 2) Remove any lingering Plaid token from UserDefaults
+      UserDefaults.standard.removeObject(forKey: "plaidAccessToken")
     }
+
 
     static func isSignedIn() -> Bool {
         return Auth.auth().currentUser != nil

@@ -7,9 +7,11 @@
 
 import UIKit
 import FirebaseCore
+import UserNotifications
+import LinkKit
 
 @main
-class AppDelegate: UIResponder, UIApplicationDelegate {
+class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
 
 
@@ -20,7 +22,29 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
           // You can configure global appearance here:
           UINavigationBar.appearance().prefersLargeTitles = true
             FirebaseApp.configure()
+            
+            // 3) Hook up UNUserNotificationCenter
+            let center = UNUserNotificationCenter.current()
+            center.delegate = self
+            
+            // 4) Request permission & schedule your 8:30 AM alert
+            NotificationService.shared.requestAuthorization { granted in
+                guard granted else { return }
+                // Schedule one notification for the next 8:30 AM
+                NotificationService.shared.scheduleTomorrowMorning()
+            }
+            
           return true
+        }
+    
+    
+    func userNotificationCenter(
+          _ center: UNUserNotificationCenter,
+          willPresent notification: UNNotification,
+          withCompletionHandler completionHandler:
+            @escaping (UNNotificationPresentationOptions) -> Void
+        ) {
+            completionHandler([.banner, .sound])
         }
 
     // MARK: UISceneSession Lifecycle

@@ -14,6 +14,4 @@ struct Transaction: Decodable {
     let category: String
 }
 
-struct TransactionsResponse: Decodable {
-    let transactions: [Transaction]
-}
+

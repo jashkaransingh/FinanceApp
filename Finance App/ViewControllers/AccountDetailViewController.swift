@@ -9,69 +9,200 @@ import UIKit
 
 class AccountDetailViewController: UIViewController {
     // MARK: – Public API
-    var accessToken: String? //access token for plaid for user's bank data
-    var period: String?            // set to "today", "week" or "month" before push
+    var accessToken: String?
+    var period: String?        // “today” / “week” / “month”
     
-    // MARK: – UI
-    private let tableView = UITableView()//for list of transaction
-    private var transactions: [Transaction] = []//array for the fetched transaction data
+    // MARK: – Private Properties
+    private let tableView = UITableView()
+    private var transactions: [Transaction] = []
+    private var isLoading = true
+    
+    private let isoDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale     = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        
         view.backgroundColor = .systemBackground
+        configureNavigationBar()
+        configureTableView()
+        loadTransactions()
+    }
+    
+    private func configureNavigationBar() {
+        // Enable large titles
+        navigationController?.navigationBar.prefersLargeTitles = true
+        navigationItem.largeTitleDisplayMode = .always
+        navigationController?.navigationBar.largeTitleTextAttributes = [
+            .font: UIFont.systemFont(ofSize: 34, weight: .bold)
+        ]
         
-        guard let accessToken = accessToken, //to make sure values are set if not then crash
-              let period = period else {
-            fatalError("Required properties not set")
+        guard
+            let token = accessToken,
+            let per   = period
+        else {
+            fatalError("AccountDetailViewController: missing accessToken or period")
         }
-        title = "\(period.capitalized)ʼs Spending"
-        
-        // 1) Setup & Layout your tableView to display transactions
-        tableView.dataSource = self//assign this viewController as the dataSource for the table
-        tableView.register(//register custom cell to reuse in table
-            TransactionCellView.self,
-            forCellReuseIdentifier: TransactionCellView.reuseID
-        )
+        title = "\(per.capitalized)’s Spending"
+    }
+    private func configureTableView() {
         tableView.translatesAutoresizingMaskIntoConstraints = false
+        tableView.backgroundColor = .clear
+        tableView.separatorStyle = .none
+        tableView.contentInsetAdjustmentBehavior = .automatic
+        
+        tableView.dataSource = self
+        tableView.delegate   = self
+        
+        tableView.register(
+            ModernTransactionCell.self,
+            forCellReuseIdentifier: ModernTransactionCell.reuseID
+        )
+        tableView.register(
+            UITableViewCell.self,
+            forCellReuseIdentifier: "SkeletonCell"
+        )
         
         view.addSubview(tableView)
-        //constraints for tableView
-        NSLayoutConstraint.activate([//pins the table to all four side
-            tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+        NSLayoutConstraint.activate([
+            tableView.topAnchor.constraint(equalTo: view.topAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-                                    ])
+        ])
+    }
+    
+    // MARK: – Data Loading
+    
+    /// Computes date range, fetches transactions, and reloads the table.
+    private func loadTransactions() {
+        guard
+            let token = accessToken,
+            let per   = period
+        else { return }
         
-        // 2) Load transaction data for the selected period and refresh the table view
-        DataService.loadTransactions(accessToken: accessToken, period: period) { [weak self] txs in
-            self?.transactions = txs//once get the data store them in transaction aaray
-            self?.tableView.reloadData()
+        isLoading = true
+        tableView.reloadData()
+        
+        let (start, end) = dateRange(for: per)
+        let startStr = isoDateFormatter.string(from: start)
+        let endStr   = isoDateFormatter.string(from: end)
+        
+        DataService.loadTransactions(
+            accessToken: token,
+            startDate:   startStr,
+            endDate:     endStr
+        ) { [weak self] txs in
+            guard let self = self else { return }
+            // Brief delay to make shimmer visible
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self.transactions = txs
+                self.isLoading = false
+                self.tableView.reloadData()
+            }
+        }
+    }
+    
+    /// Returns start and end `Date` for the given period.
+    private func dateRange(for period: String) -> (Date, Date) {
+        let today = Date()
+        let cal   = Calendar.current
+        
+        switch period.lowercased() {
+        case "today":
+            return (today, today)
+        case "week":
+            let weekAgo = cal.date(byAdding: .day, value: -7, to: today)!
+            return (weekAgo, today)
+        case "month":
+            let monthAgo = cal.date(byAdding: .month, value: -1, to: today)!
+            return (monthAgo, today)
+        default:
+            return (today, today)
         }
     }
 }
 
+
 // MARK: – UITableViewDataSource
-extension AccountDetailViewController: UITableViewDataSource {//for supplying data to tableView
-    func tableView(//this function returns no. of rows to display
-        _ tableView: UITableView,
-        numberOfRowsInSection section: Int
-    ) -> Int {
-        return transactions.count//in this case it's number of transaction
+
+extension AccountDetailViewController: UITableViewDataSource {
+    
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return isLoading ? 5 : transactions.count
     }
     
-    func tableView(//this method - cell to display at an index path
+    func tableView(
         _ tableView: UITableView,
         cellForRowAt indexPath: IndexPath
     ) -> UITableViewCell {
-        guard let cell = tableView.dequeueReusableCell(//using the TransactionCellView to display
-            withIdentifier: TransactionCellView.reuseID,
-            for: indexPath
-        ) as? TransactionCellView else {
-            fatalError("Unable to dequeue TransactionCellView")
+        
+        if isLoading {
+            return makeSkeletonCell(for: tableView, at: indexPath)
         }
-        cell.configure(with: transactions[indexPath.row])//populate the cell using the conigure method
+        
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: ModernTransactionCell.reuseID,
+            for: indexPath
+        ) as! ModernTransactionCell
+        cell.configure(with: transactions[indexPath.row])
+        return cell
+    }
+    
+    /// Creates a shimmer “loading” cell.
+    private func makeSkeletonCell(
+        for tableView: UITableView,
+        at indexPath: IndexPath
+    ) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: "SkeletonCell",
+            for: indexPath
+        )
+        cell.selectionStyle = .none
+        
+        // Remove old shimmer views
+        cell.contentView.subviews.forEach { $0.removeFromSuperview() }
+        
+        let shimmer = ShimmerView()
+        shimmer.translatesAutoresizingMaskIntoConstraints = false
+        cell.contentView.addSubview(shimmer)
+        NSLayoutConstraint.activate([
+            shimmer.topAnchor.constraint(equalTo: cell.contentView.topAnchor, constant: 8),
+            shimmer.leadingAnchor.constraint(equalTo: cell.contentView.leadingAnchor, constant: 16),
+            shimmer.trailingAnchor.constraint(equalTo: cell.contentView.trailingAnchor, constant: -16),
+            shimmer.bottomAnchor.constraint(equalTo: cell.contentView.bottomAnchor, constant: -8)
+        ])
         return cell
     }
 }
+
+// MARK: – UITableViewDelegate
+
+extension AccountDetailViewController: UITableViewDelegate {
+    
+    func tableView(
+        _ tableView: UITableView,
+        willDisplay cell: UITableViewCell,
+        forRowAt indexPath: IndexPath
+    ) {
+        // Fade-in animation
+        cell.alpha = 0
+        cell.transform = CGAffineTransform(translationX: 0, y: 20)
+        UIView.animate(
+            withDuration: 0.4,
+            delay: 0.05 * Double(indexPath.row),
+            options: [.curveEaseOut],
+            animations: {
+                cell.alpha = 1
+                cell.transform = .identity
+            }
+        )
+    }
+}
+
+
 

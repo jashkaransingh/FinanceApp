@@ -10,10 +10,20 @@
 		413EA1D92DE56CDC00545123 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 413EA1D82DE56CDC00545123 /* FirebaseAuth */; };
 		413EA1DB2DE56CDC00545123 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 413EA1DA2DE56CDC00545123 /* FirebaseCore */; };
 		413EA2142DE6A9DD00545123 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 413EA2132DE6A9DD00545123 /* FirebaseFirestore */; };
+		413EA3822DEE44D400545123 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 413EA3632DEE449500545123 /* WidgetKit.framework */; };
+		413EA3832DEE44D400545123 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 413EA3652DEE449600545123 /* SwiftUI.framework */; };
+		413EA3922DEE44D500545123 /* FinanceWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 413EA3812DEE44D400545123 /* FinanceWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		41C5E7C22DD6E6C1005392C0 /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 41C5E7C12DD6E6C1005392C0 /* LinkKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		413EA3902DEE44D500545123 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 41C5E7222DB49EA1005392C0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 413EA3802DEE44D400545123;
+			remoteInfo = FinanceWidgetsExtension;
+		};
 		41C5E7412DB49EA3005392C0 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 41C5E7222DB49EA1005392C0 /* Project object */;
@@ -30,13 +40,45 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		413EA3782DEE449800545123 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				413EA3922DEE44D500545123 /* FinanceWidgetsExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		413EA3632DEE449500545123 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		413EA3652DEE449600545123 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		413EA3812DEE44D400545123 /* FinanceWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FinanceWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		413EA3A42DEE496C00545123 /* FinanceWidgetsExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FinanceWidgetsExtension.entitlements; sourceTree = "<group>"; };
 		41C5E72A2DB49EA1005392C0 /* Finance App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Finance App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		41C5E7402DB49EA3005392C0 /* Finance AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Finance AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		41C5E74A2DB49EA3005392C0 /* Finance AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Finance AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		413EA3962DEE44D500545123 /* Exceptions for "FinanceWidgets" folder in "FinanceWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 413EA3802DEE44D400545123 /* FinanceWidgetsExtension */;
+		};
+		413EA3A82DEE4A8700545123 /* Exceptions for "Finance App" folder in "FinanceWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Models/SummaryEntry.swift,
+			);
+			target = 413EA3802DEE44D400545123 /* FinanceWidgetsExtension */;
+		};
 		41C5E7522DB49EA3005392C0 /* Exceptions for "Finance App" folder in "Finance App" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -47,10 +89,19 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		413EA3842DEE44D400545123 /* FinanceWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				413EA3962DEE44D500545123 /* Exceptions for "FinanceWidgets" folder in "FinanceWidgetsExtension" target */,
+			);
+			path = FinanceWidgets;
+			sourceTree = "<group>";
+		};
 		41C5E72C2DB49EA1005392C0 /* Finance App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				41C5E7522DB49EA3005392C0 /* Exceptions for "Finance App" folder in "Finance App" target */,
+				413EA3A82DEE4A8700545123 /* Exceptions for "Finance App" folder in "FinanceWidgetsExtension" target */,
 			);
 			path = "Finance App";
 			sourceTree = "<group>";
@@ -68,6 +119,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		413EA37E2DEE44D400545123 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				413EA3832DEE44D400545123 /* SwiftUI.framework in Frameworks */,
+				413EA3822DEE44D400545123 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		41C5E7272DB49EA1005392C0 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -96,12 +156,24 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		413EA3622DEE449500545123 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				413EA3632DEE449500545123 /* WidgetKit.framework */,
+				413EA3652DEE449600545123 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		41C5E7212DB49EA1005392C0 = {
 			isa = PBXGroup;
 			children = (
+				413EA3A42DEE496C00545123 /* FinanceWidgetsExtension.entitlements */,
 				41C5E72C2DB49EA1005392C0 /* Finance App */,
 				41C5E7432DB49EA3005392C0 /* Finance AppTests */,
 				41C5E74D2DB49EA3005392C0 /* Finance AppUITests */,
+				413EA3842DEE44D400545123 /* FinanceWidgets */,
+				413EA3622DEE449500545123 /* Frameworks */,
 				41C5E72B2DB49EA1005392C0 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -112,6 +184,7 @@
 				41C5E72A2DB49EA1005392C0 /* Finance App.app */,
 				41C5E7402DB49EA3005392C0 /* Finance AppTests.xctest */,
 				41C5E74A2DB49EA3005392C0 /* Finance AppUITests.xctest */,
+				413EA3812DEE44D400545123 /* FinanceWidgetsExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -119,6 +192,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		413EA3802DEE44D400545123 /* FinanceWidgetsExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 413EA3932DEE44D500545123 /* Build configuration list for PBXNativeTarget "FinanceWidgetsExtension" */;
+			buildPhases = (
+				413EA37D2DEE44D400545123 /* Sources */,
+				413EA37E2DEE44D400545123 /* Frameworks */,
+				413EA37F2DEE44D400545123 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				413EA3842DEE44D400545123 /* FinanceWidgets */,
+			);
+			name = FinanceWidgetsExtension;
+			packageProductDependencies = (
+			);
+			productName = FinanceWidgetsExtension;
+			productReference = 413EA3812DEE44D400545123 /* FinanceWidgetsExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		41C5E7292DB49EA1005392C0 /* Finance App */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 41C5E7532DB49EA3005392C0 /* Build configuration list for PBXNativeTarget "Finance App" */;
@@ -126,10 +221,12 @@
 				41C5E7262DB49EA1005392C0 /* Sources */,
 				41C5E7272DB49EA1005392C0 /* Frameworks */,
 				41C5E7282DB49EA1005392C0 /* Resources */,
+				413EA3782DEE449800545123 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				413EA3912DEE44D500545123 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				41C5E72C2DB49EA1005392C0 /* Finance App */,
@@ -198,9 +295,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1620;
+				LastSwiftUpdateCheck = 1630;
 				LastUpgradeCheck = 1620;
 				TargetAttributes = {
+					413EA3802DEE44D400545123 = {
+						CreatedOnToolsVersion = 16.3;
+					};
 					41C5E7292DB49EA1005392C0 = {
 						CreatedOnToolsVersion = 16.2;
 					};
@@ -235,11 +335,19 @@
 				41C5E7292DB49EA1005392C0 /* Finance App */,
 				41C5E73F2DB49EA3005392C0 /* Finance AppTests */,
 				41C5E7492DB49EA3005392C0 /* Finance AppUITests */,
+				413EA3802DEE44D400545123 /* FinanceWidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		413EA37F2DEE44D400545123 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		41C5E7282DB49EA1005392C0 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -264,6 +372,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		413EA37D2DEE44D400545123 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		41C5E7262DB49EA1005392C0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -288,6 +403,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		413EA3912DEE44D500545123 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 413EA3802DEE44D400545123 /* FinanceWidgetsExtension */;
+			targetProxy = 413EA3902DEE44D500545123 /* PBXContainerItemProxy */;
+		};
 		41C5E7422DB49EA3005392C0 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 41C5E7292DB49EA1005392C0 /* Finance App */;
@@ -301,16 +421,76 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		413EA3942DEE44D500545123 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = FinanceWidgetsExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8BP98H3BD8;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FinanceWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = FinanceWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.teamcode.Finance-App.FinanceWidgets";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		413EA3952DEE44D500545123 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = FinanceWidgetsExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8BP98H3BD8;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FinanceWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = FinanceWidgets;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.teamcode.Finance-App.FinanceWidgets";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		41C5E7542DB49EA3005392C0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Finance App/Finance App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8BP98H3BD8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Finance App/Info.plist";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app needs to connect to your local development server";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -333,11 +513,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Finance App/Finance App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8BP98H3BD8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Finance App/Info.plist";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app needs to connect to your local development server";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -549,6 +731,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		413EA3932DEE44D500545123 /* Build configuration list for PBXNativeTarget "FinanceWidgetsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				413EA3942DEE44D500545123 /* Debug */,
+				413EA3952DEE44D500545123 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		41C5E7252DB49EA1005392C0 /* Build configuration list for PBXProject "Finance App" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

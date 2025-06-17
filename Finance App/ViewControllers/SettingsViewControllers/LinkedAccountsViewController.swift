@@ -6,99 +6,132 @@
 //
 
 import UIKit
+import FirebaseAuth
+import FirebaseFirestore
 
-class LinkedAccountsViewController: UITableViewController {
+/// Lists the user’s linked Plaid accounts and lets them add, replace, or remove.
+final class LinkedAccountsViewController: UITableViewController {
+    
+    // MARK: – Properties
+
+    /// The single stored Plaid access token (nil if none linked).
     private var accessToken: String? {
         get { UserDefaults.standard.string(forKey: "plaidAccessToken") }
         set {
             UserDefaults.standard.set(newValue, forKey: "plaidAccessToken")
-            loadAccounts()
+            reloadData()
         }
     }
-    
+
+    // MARK: – Lifecycle
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Linked Accounts"
-        navigationItem.rightBarButtonItem =
-        UIBarButtonItem(barButtonSystemItem: .add,
-                        target: self,
-                        action: #selector(addAccount))
-        tableView = UITableView(frame: .zero, style: .insetGrouped)
-        loadAccounts()
+        configureNavigationBar()
+        configureTableView()
+        reloadData()
     }
-    
-    private func loadAccounts() {
-        // For now we only store one token; if you support multiple, load them here
+
+    // MARK: – UI Setup
+
+    private func configureNavigationBar() {
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .add,
+            target: self,
+            action: #selector(addAccount)
+        )
+    }
+
+    private func configureTableView() {
+        tableView = UITableView(frame: .zero, style: .insetGrouped)
+        tableView.register(
+            UITableViewCell.self,
+            forCellReuseIdentifier: "AccountCell"
+        )
+    }
+
+    // MARK: – Data
+
+    /// Reloads the table view to reflect current `accessToken`.
+    private func reloadData() {
         tableView.reloadData()
     }
-    
-    // MARK: - Table DataSource
-    
+
+    // MARK: – Table DataSource
+
     override func numberOfSections(in tableView: UITableView) -> Int { 1 }
-    override func tableView(_ tb: UITableView, numberOfRowsInSection sec: Int) -> Int {
+
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return accessToken == nil ? 0 : 1
     }
-    
-    override func tableView(_ tb: UITableView, cellForRowAt ip: IndexPath) -> UITableViewCell {
-        let cell = tb.dequeueReusableCell(withIdentifier: "cell")
-        ?? UITableViewCell(style: .subtitle, reuseIdentifier: "cell")
+
+    override func tableView(
+        _ tableView: UITableView,
+        cellForRowAt indexPath: IndexPath
+    ) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: "AccountCell",
+            for: indexPath
+        )
         cell.textLabel?.text = "My Bank Account"
         cell.detailTextLabel?.text = accessToken
-        cell.accessoryType = .detailButton  // “Replace” button
+        cell.accessoryType = .detailButton // Tapping allows “Replace”
         return cell
     }
-    
-    // MARK: - Delete (unlink)
-    
-    override func tableView(_ tb: UITableView,
-                            commit editingStyle: UITableViewCell.EditingStyle,
-                            forRowAt ip: IndexPath) {
+
+    // MARK: – Table Editing (Unlink)
+
+    override func tableView(
+        _ tableView: UITableView,
+        commit editingStyle: UITableViewCell.EditingStyle,
+        forRowAt indexPath: IndexPath
+    ) {
         guard editingStyle == .delete, let token = accessToken else { return }
-        
+        unlinkAccount(token)
+    }
+
+    private func unlinkAccount(_ token: String) {
         PlaidService.shared.removeItem(accessToken: token) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
                 case .success:
-                    // clears UserDefaults for you, then:
                     self?.accessToken = nil
+                    self?.notifyHomeToRefresh()
                 case .failure(let error):
-                    print("Failed to unlink:", error)
+                    print("❌ Failed to unlink Plaid:", error)
                 }
             }
         }
     }
 
+    // MARK: – Accessory Button (Replace)
 
-    // MARK: - Replace (detail accessory)
-
-    override func tableView(_ tb: UITableView, accessoryButtonTappedForRowWith ip: IndexPath) {
-        // Treat “Replace” the same as delete → add
-        deleteThenAdd()
+    override func tableView(
+        _ tableView: UITableView,
+        accessoryButtonTappedForRowWith indexPath: IndexPath
+    ) {
+        replaceAccount()
     }
 
-    // MARK: - Add / Replace
+    // MARK: – Add / Replace Account
 
     @objc private func addAccount() {
-        // exactly your fabTapped → create_link_token flow
         PlaidService.shared.startPlaidLink(
-                    from: self,
-                    onSuccess: { [weak self] in
-                        // new token stored in UserDefaults for you
-                        self?.loadAccounts()
-                    },
-                    onError: { error in
-                        print("Plaid flow failed:", error)
-                        // you could show an alert here
-                    }
-                )
+            from: self,
+            onSuccess: { [weak self] in
+                self?.reloadData()
+            },
+            onError: { error in
+                print("❌ Plaid flow failed:", error)
             }
-    
+        )
+    }
 
-    private func deleteThenAdd() {
+    private func replaceAccount() {
         if accessToken != nil {
-            // delete first, then open Link
-            tableView(self.tableView, commit: .delete, forRowAt: [0,0])
-            // give a slight delay to ensure deletion propagates
+            // Delete first, then add new link after short delay
+            unlinkAccount(accessToken!)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.addAccount()
             }
@@ -106,5 +139,19 @@ class LinkedAccountsViewController: UITableViewController {
             addAccount()
         }
     }
+
+    // MARK: – Coordination
+
+    /// Tells the Home (AccountsViewController) to refresh on next appear.
+    private func notifyHomeToRefresh() {
+        let nav = navigationController
+        let homeVC = nav?
+            .viewControllers
+            .compactMap { $0 as? AccountsViewController }
+            .first
+
+        homeVC?.needsRefresh = true
+    }
 }
+
 

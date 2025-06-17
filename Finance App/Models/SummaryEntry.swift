@@ -6,3 +6,11 @@
 //
 
 import Foundation
+
+struct SummaryEntry: Codable, Identifiable {
+    let id = UUID()
+    let title: String
+    let amount: Double
+    let subtitle: String
+}
+

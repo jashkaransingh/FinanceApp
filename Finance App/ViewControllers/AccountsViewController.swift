@@ -12,20 +12,22 @@ import FirebaseFirestore
 
 
 class AccountsViewController: UIViewController {
-    // MARK: - Properties
+    
+    // MARK: - UI Properties
     private let headerView = TitleHeaderView()// 'My Accounts' header at top
     private let scrollView = UIScrollView()// Scrollable area for cards
     private let stackView  = UIStackView()// Vertical stack inside scrollView
+    
+    // MARK: – Data Properties
     private var summaries: [AccountSummary] = []//list of account summaries (fetched from backend)
     var needsRefresh = true// Tracks whether we need to re‐fetch the cards
     private var placeholderButton: UIButton?// If no accounts exist yet, we show a placeholder “Connect Bank” button
-    
-    
-    private var plaidLinkHandler: Handler?//retains the plaid handler after the launch
+    private var isLoadingSummaries = false
     private var accessToken: String? {//store accessToken to access throught the app
         get { UserDefaults.standard.string(forKey: "plaidAccessToken") }
         set { UserDefaults.standard.set(newValue, forKey: "plaidAccessToken") }
     }
+    private var plaidLinkHandler: Handler?//retains the plaid handler after the launch
     
     // MARK: – Lifecycle
     override func viewDidLoad() {
@@ -36,8 +38,21 @@ class AccountsViewController: UIViewController {
         
         configureHeader()
         configureScrollView()
-        setupScrollStack()
-        setupFloatingButton()
+        configureStackView()
+        configureFloatingButton()
+        setupActions()
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.setNavigationBarHidden(true, animated: animated)
+        
+        guard needsRefresh else { return }
+        //show skeleton cards
+        isLoadingSummaries = true
+        showSkeletonCards()
+        //then fetch
+        fetchBankStatusFromFirestore()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -45,20 +60,8 @@ class AccountsViewController: UIViewController {
         // When leaving this screen, restore the nav bar for downstream VCs
         navigationController?.setNavigationBarHidden(false, animated: animated)
     }
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        navigationController?.setNavigationBarHidden(true, animated: animated)
-        
-        guard needsRefresh else {
-            // No need to re‐fetch; the UI is already up‐to‐date
-            return
-        }
-        // If needsRefresh is true, check Firestore for bank status
-        fetchBankStatusFromFirestore()
-    }
     
-    // MARK: - Layout Helpers
-    
+    // MARK: – UI Configuration
     private func configureHeader() {// Configures and constrains the custom headerView.
         view.addSubview(headerView)
         headerView.translatesAutoresizingMaskIntoConstraints = false
@@ -69,7 +72,9 @@ class AccountsViewController: UIViewController {
             headerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
             headerView.heightAnchor.constraint(equalToConstant: 44) // match native nav-bar height
         ])
-        
+    }
+    
+    private func setupActions() {
         headerView.onProfileTap = { [weak self] in
             self?.openProfile()
         }
@@ -83,6 +88,7 @@ class AccountsViewController: UIViewController {
     private func configureScrollView() {// Configures and constrains the scrollView below the header
         view.addSubview(scrollView)
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+        
         NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -91,18 +97,18 @@ class AccountsViewController: UIViewController {
         ])
     }
     
-    private func setupScrollStack() {// Configures the vertical stackView inside the scrollView
-        // 1) Configure the stack
+    private func configureStackView() {// Configures the vertical stackView inside the scrollView
+        // Configure the stack
         stackView.axis = .vertical
         stackView.spacing = 16
         stackView.layoutMargins = .init(top: 16, left: 16, bottom: 16, right: 16)
         stackView.isLayoutMarginsRelativeArrangement = true
         
-        // 2) Embed in scroll
+        // Embed in scrollView
         scrollView.addSubview(stackView)
         stackView.translatesAutoresizingMaskIntoConstraints = false
         
-        // 3) Pin edges & width
+        // Add Constraints
         NSLayoutConstraint.activate([
             stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
             stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
@@ -112,9 +118,10 @@ class AccountsViewController: UIViewController {
         ])
     }
     
-    private func setupFloatingButton() {// Adds the “+” floating button in the bottom‐right corner
+    private func configureFloatingButton() {// Adds the “+” floating button in the bottom‐right corner
         let fab = FloatingActionButton()
         view.addSubview(fab)
+        
         NSLayoutConstraint.activate([
             fab.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             fab.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24)
@@ -122,121 +129,120 @@ class AccountsViewController: UIViewController {
         fab.addTarget(self, action: #selector(fabTapped), for: .touchUpInside)
     }
     
-    
-    // MARK: – Firestore Check
-    
-    /// 1 Look up the current user’s Firestore document.
-    /// 2 If `bankAccessToken` exists, store it locally & load cards.
-    /// 3 Otherwise show a “Connect Bank” placeholder.
-    private func fetchBankStatusFromFirestore() {
-        guard let uid = Auth.auth().currentUser?.uid else {
-            // If no logged-in user, default to showing “Connect Bank”
-            showConnectBankPlaceholder()
-            needsRefresh = false
-            return
-        }
-        
-        let docRef = Firestore.firestore().collection("users").document(uid)
-        docRef.getDocument { snapshot, error in
-            if let data = snapshot?.data(),
-               let token = data["bankAccessToken"] as? String
-            {
-                // They’ve linked before: save locally & load the real cards
-                self.accessToken = token
-                self.loadSummariesAndShowCards()
-                // 2) Now that UI is drawn, mark needsRefresh = false
-                self.needsRefresh = false  // ← HERE
-            } else {
-                // No token in Firestore → show the “Connect Bank” button
-                self.showConnectBankPlaceholder()
-                // 2) We just drew the placeholder UI, so mark needsRefresh = false
-                self.needsRefresh = false  // ← HERE
-            }
-        }
-    }
-    
-    /// Called once we know there is a valid bank token. This is just your old `loadSummaries()` + `populateCards()`,
-    /// but we also remove any “placeholder” subview first.
-    private func loadSummariesAndShowCards() {
-        // ② Before you draw cards, make sure to remove the placeholder from `view`:
-        placeholderButton?.removeFromSuperview()
-        placeholderButton = nil
-        // 1) Remove any “Connect Bank” button if it was added earlier
-        self.stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        
-        stackView.alignment = .fill
-        
-        // 2) Now call the same code you already had in `loadSummaries()`
-        guard let token = accessToken else { return }
-        DataService.loadSummariesFromBackend(accessToken: token) { fetched in
-            self.summaries = fetched
-            self.populateCards()
-            self.storeSummariesForWidget(fetched)
-        }
-    }
-    private func storeSummariesForWidget(_ summaries: [AccountSummary]) {
-        let entries = summaries.map {
-            SummaryEntry(title: $0.periodTitle,
-                         amount: $0.amount,
-                         subtitle: $0.subtitle)
-        }
-        if let data = try? JSONEncoder().encode(entries) {
-            UserDefaults(suiteName: "group.com.your.bundle")?.set(data, forKey: "summaryData")
-        }
-    }
-
-    
-    /// If we don’t have a bank token yet, show a single big button in place of the cards.
-    private func showConnectBankPlaceholder() {
-        // 1) Remove any previous arranged subviews from stack (if you still care about the stack’s old contents)
+    // MARK: – Skeleton & Placeholder
+    private func showSkeletonCards() {// Show loading animation while fetching data
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        for _ in 0..<3 {
+            let skeleton = ShimmerView()
+            skeleton.translatesAutoresizingMaskIntoConstraints = false
+            skeleton.heightAnchor.constraint(equalToConstant: 140).isActive = true
+            stackView.addArrangedSubview(skeleton)
+        }
+    }
+    
+    /// Show “Connect Your Bank” button in place of the cards when we don’t have a bank token yet
+    private func showConnectBankPlaceholder() {
         
-        // If there’s already a placeholder sitting in `view`, remove it first:
-        placeholderButton?.removeFromSuperview()
+        stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }// Remove any previous arranged subviews from stack
+        placeholderButton?.removeFromSuperview()// If there’s already a placeholder sitting in `view`, remove it first
         
-        // Build a new placeholder:
-        let button = makeConnectButton()
+        let button = makeConnectButton()// Build a new placeholder
         button.addTarget(self, action: #selector(fabTapped), for: .touchUpInside)
-        
-        // Keep a reference so we can tear it down later:
         placeholderButton = button
         
-        // Add it to `view` and center it:
-        view.addSubview(button)
-        NSLayoutConstraint.activate([
+        view.addSubview(button)// Add it to `view`
+        NSLayoutConstraint.activate([// and center it
             button.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
             button.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
-        ])
-
+                                    ])
     }
     
-    /// Builds and returns a “Connect Your Bank” button with borders, corner radius, and custom color.
-    private func makeConnectButton() -> UIButton {
+    private func makeConnectButton() -> UIButton {// Builds “Connect Your Bank” button
         let btn = UIButton(type: .system)
         btn.setTitle("Connect Your Bank", for: .normal)
         btn.setTitleColor(.systemBlue, for: .normal)
         btn.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
-        
-        // Give it a background color that contrasts with the grouped background
-        btn.backgroundColor = .secondarySystemBackground
-        
-        // Rounded corners and border
-        btn.layer.cornerRadius = 10
+        btn.backgroundColor = .secondarySystemBackground// background color
+        btn.layer.cornerRadius = 10// Rounded corners and border
         btn.layer.borderWidth = 2
         btn.layer.borderColor = UIColor.systemBlue.cgColor
         
-        // Must disable autoresizing-mask translation before applying Auto Layout constraints
         btn.translatesAutoresizingMaskIntoConstraints = false
         
-        // Fix the button’s width (so it doesn’t stretch full width)
-        btn.widthAnchor.constraint(equalToConstant: 200).isActive = true
-        // Fix the height (e.g. 50 points tall)
-        btn.heightAnchor.constraint(equalToConstant: 50).isActive = true
+        btn.widthAnchor.constraint(equalToConstant: 200).isActive = true// button’s width so it doesn’t stretch full width
+        btn.heightAnchor.constraint(equalToConstant: 50).isActive = true// button’s height
         
         return btn
     }
     
+    // MARK: – Data Loading
     
+    /// Check Firestore for saved access token
+    /// If found, save locally and load summaries
+    /// Otherwise show a “Connect Bank” placeholder.
+    private func fetchBankStatusFromFirestore() {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            showConnectBankPlaceholder()// If no logged-in user, default to showing “Connect Bank”
+            needsRefresh = false
+            return
+        }
+        Firestore.firestore()
+            .collection("users")
+            .document(uid)
+            .getDocument { [weak self] snapshot, _ in
+                guard let self = self else { return }
+                if
+                    let data = snapshot?.data(),
+                    let token = data["bankAccessToken"] as? String
+                {
+                    self.accessToken = token// They’ve linked before: save locally & load the real cards
+                    self.loadSummariesAndShowCards()
+                } else {
+                    self.showConnectBankPlaceholder()
+                }
+                self.needsRefresh = false//Now that UI is drawn, mark needsRefresh = false
+            }
+        
+        //        let docRef = Firestore.firestore().collection("users").document(uid)
+        //        docRef.getDocument { snapshot, error in
+        //            if let data = snapshot?.data(),
+        //               let token = data["bankAccessToken"] as? String
+        //            {
+        //                // They’ve linked before: save locally & load the real cards
+        //                self.accessToken = token
+        //                self.loadSummariesAndShowCards()
+        //                // 2) Now that UI is drawn, mark needsRefresh = false
+        //                self.needsRefresh = false  // ← HERE
+        //            } else {
+        //                // No token in Firestore → show the “Connect Bank” button
+        //                self.showConnectBankPlaceholder()
+        //                // 2) We just drew the placeholder UI, so mark needsRefresh = false
+        //                self.needsRefresh = false  // ← HERE
+        //            }
+        //        }
+    }
+    
+    /// Remove “Connect Bank” button, fetch from backend, then render cards
+    private func loadSummariesAndShowCards() {
+        placeholderButton?.removeFromSuperview()// Before you draw cards, remove the placeholder from `view`
+        placeholderButton = nil
+        stackView.alignment = .fill
+        guard let token = accessToken else { return }
+        
+        // Leave animation showing here
+        DataService.loadSummariesFromBackend(accessToken: token) { fetched in
+            DispatchQueue.main.async {
+                self.stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }// NOW remove shimmer (animation)
+                self.isLoadingSummaries = false
+                self.summaries = fetched
+                self.populateCards()
+                self.storeSummariesForWidget(fetched)
+            }
+            HapticsManager.trigger(.medium)//Add haptics when the data is loaded
+        }
+    }
+    
+    // MARK: – UI Population
     private func populateCards() {
         summaries.forEach { model in//iterate through each item in summaries
             let card = AccountCardView()//create instance of custom card view
@@ -250,17 +256,29 @@ class AccountsViewController: UIViewController {
         }
     }
     
-    @objc private func openProfile() {
-        let settingsVC = SettingsViewController()
-        navigationController?.pushViewController(settingsVC, animated: true)
+    // MARK: – Actions
+    @objc private func fabTapped() {
+        print("💡 fabTapped called")
+        PlaidService.shared.startPlaidLink(
+            from: self,
+            onSuccess: { [weak self] in
+                guard let self = self else { return }
+                self.needsRefresh = true
+                self.loadSummariesAndShowCards()
+            },
+            onError: { error in
+                print("Plaid flow failed:", error)
+            }
+        )
     }
-    
     
     @objc private func cardTapped(_ card: AccountCardView) {
         guard//unwrap these 3 items below
             let model = card.model,
             let token = accessToken
         else { return }
+        
+        HapticsManager.trigger(.light)
         
         let detailVC = AccountDetailViewController()//create the instance of accountViewcontroller to display
         detailVC.accessToken = token//passes the stored accessToken to detailView to authorize fetch transaction request
@@ -275,34 +293,23 @@ class AccountsViewController: UIViewController {
         navigationController?.pushViewController(detailVC, animated: true)//pushes into navigation stack
     }
     
-    //    private func loadSummaries() {//to fetch user's summary data from your backend
-    //        guard let token = accessToken else { return }
-    //        DataService.loadSummariesFromBackend(accessToken: token) { fetched in//call method to fetch summary from backend
-    //            self.summaries = fetched//stores the summary
-    //            self.stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }//remove existing cards from the stackView to prevent duplication
-    //            self.populateCards()//add new accountCardView instance using fresh data
-    //        }
-    //    }
-    
-    
-    //Add comment here
-    @objc private func fabTapped() {
-        PlaidService.shared.startPlaidLink(
-            from: self,
-            onSuccess: { [weak self] in
-                guard let self = self else { return }
-                // We have just written a fresh token into Firestore + UserDefaults
-                self.needsRefresh = true   // ← HERE
-                
-                // Then immediately load summaries and show cards:
-                self.loadSummariesAndShowCards()
-            },
-            onError: { error in
-                print("Plaid flow failed:", error)
-            }
-        )
+    @objc private func openProfile() {
+        HapticsManager.trigger(.selection)
+        let settingsVC = SettingsViewController()
+        navigationController?.pushViewController(settingsVC, animated: true)
     }
     
+    // MARK: – Widget Sync
+    private func storeSummariesForWidget(_ summaries: [AccountSummary]) {// Encode summaries and save to App Group for widget
+        let entries = summaries.map {
+            SummaryEntry(title: $0.periodTitle,
+                         amount: $0.amount,
+                         subtitle: $0.subtitle)
+        }
+        if let data = try? JSONEncoder().encode(entries) {
+            UserDefaults(suiteName: "group.com.your.bundle")?.set(data, forKey: "summaryData")
+        }
+    }
 }
 
 //User taps FAB → fabTapped()

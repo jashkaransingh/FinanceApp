@@ -15,6 +15,4 @@ struct AccountSummary: Decodable {
     let usesPieIcon: Bool        // true for “This Month”
 }
 
-struct SummariesResponse: Decodable {//aloow swift to decode JSON into this struct
-    let summaries: [AccountSummary]
-}
+

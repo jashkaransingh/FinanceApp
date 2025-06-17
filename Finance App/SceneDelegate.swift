@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import LinkKit
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -49,6 +50,17 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
             window?.makeKeyAndVisible()
           }
+    func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
+        PlaidService.shared.linkHandler?.open(
+          presentUsing: .viewController(UIApplication.shared.topMostViewController()!)
+        )
+    }
+
+
+
+
+
+
     
     static func switchToMainApp() {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -63,7 +75,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let nav2 = UINavigationController(rootViewController: historyVC)
         nav2.tabBarItem = UITabBarItem(title: nil, image: UIImage(systemName: "clock"), tag: 1)
 
-        let tabBar = UITabBarController()
+        let tabBar = MainTabBarController()
         tabBar.viewControllers = [nav1, nav2]
         tabBar.tabBar.tintColor = .label
         tabBar.tabBar.unselectedItemTintColor = .secondaryLabel
@@ -117,5 +129,26 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
 
+}
+extension UIApplication {
+    func topMostViewController(base: UIViewController? = UIApplication.shared.connectedScenes
+        .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+        .first?.rootViewController) -> UIViewController? {
+        
+        if let nav = base as? UINavigationController {
+            return topMostViewController(base: nav.visibleViewController)
+        }
+
+        if let tab = base as? UITabBarController,
+           let selected = tab.selectedViewController {
+            return topMostViewController(base: selected)
+        }
+
+        if let presented = base?.presentedViewController {
+            return topMostViewController(base: presented)
+        }
+
+        return base
+    }
 }
 

@@ -5,103 +5,129 @@
 //  Created by Jas  on 4/19/25.
 //
 
+import UIKit
 import Foundation
 
+
+import Foundation
+
+/// Encapsulates all network calls to your backend.
 class DataService {
+
+    // MARK: – Public API
+
+    /// Fetches account summaries for the connected bank.
+    /// - Parameters:
+    ///   - accessToken: Plaid access token for authentication.
+    ///   - completion: Called on the main thread with fetched summaries or empty on failure.
     static func loadSummariesFromBackend(
-        accessToken: String,//require for authentication
-        completion: @escaping ([AccountSummary]) -> Void//returns an array of AccountSummary
-    ) {
-        let urlString = "http://localhost:5050/summaries?access_token=\(accessToken)"
-//        let urlString = "http://192.168.0.87:5050/summaries?access_token=\(accessToken)"
-        //build an URL with accessToken
-        guard let url = URL(string: urlString) else {//check if the url is valid or else
-            return completion([])//return empty result
-        }
-        
-        URLSession.shared.dataTask(with: url) { data, response, error in //starts an asynchronus http request
-            // 1) catches network error
-            if let error = error {
-                return DispatchQueue.main.async { completion([]) }//if nil return empty array
-            }
-            // 2) Data check
-            guard let data = data else {
-                return DispatchQueue.main.async { completion([]) }//if nil return empty array
-            }
-            // 3) Decode the JSON resposne to SummariesResponse Model
-            do {
-                let wrapper = try JSONDecoder().decode(SummariesResponse.self, from: data)
-                DispatchQueue.main.async {
-                    completion(wrapper.summaries)
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    completion([])
-                }
-            }
-        }
-        .resume()
-    }
-    static func loadTransactions(// same as above - loadSummariesFromBackend
         accessToken: String,
-        period: String,                       // “today” / “week” / “month”
-        completion: @escaping ([Transaction]) -> Void //return an array of transaction
+        completion: @escaping ([AccountSummary]) -> Void
     ) {
-        let urlString = "http://192.168.0.87:5050/transactions?access_token=\(accessToken)&period=\(period)"
-        guard let url = URL(string: urlString) else {
+        guard let url = API.makeURL(
+            path: "/summaries",
+            queries: ["access_token": accessToken]
+        ) else {
             return DispatchQueue.main.async { completion([]) }
         }
-        
-        URLSession.shared.dataTask(with: url) { data, _, error in
+
+        performRequest(url: url, decodeTo: SummariesResponse.self) { result in
+            switch result {
+            case .success(let wrapper):
+                completion(wrapper.summaries)
+            case .failure:
+                completion([])
+            }
+        }
+    }
+
+    /// Fetches transactions for a given period (today/week/month).
+    static func loadTransactions(
+        accessToken: String,
+        period: String,
+        completion: @escaping ([Transaction]) -> Void
+    ) {
+        guard let url = API.makeURL(
+            path: "/transactions",
+            queries: ["access_token": accessToken, "period": period]
+        ) else {
+            return DispatchQueue.main.async { completion([]) }
+        }
+
+        performRequest(url: url, decodeTo: TransactionsResponse.self) { result in
+            switch result {
+            case .success(let resp):
+                completion(resp.transactions)
+            case .failure:
+                completion([])
+            }
+        }
+    }
+
+    /// Fetches transactions between two dates.
+    static func loadTransactions(
+        accessToken: String,
+        startDate: String,
+        endDate: String,
+        completion: @escaping ([Transaction]) -> Void
+    ) {
+        guard let url = API.makeURL(
+            path: "/transactions",
+            queries: [
+                "access_token": accessToken,
+                "start_date": startDate,
+                "end_date": endDate
+            ]
+        ) else {
+            return DispatchQueue.main.async { completion([]) }
+        }
+
+        performRequest(url: url, decodeTo: TransactionsResponse.self) { result in
+            switch result {
+            case .success(let resp):
+                completion(resp.transactions)
+            case .failure:
+                completion([])
+            }
+        }
+    }
+
+    // MARK: – Private Helpers
+
+    /// Generic executor for GET requests that decode JSON into the given model.
+    private static func performRequest<T: Decodable>(
+        url: URL,
+        decodeTo type: T.Type,
+        completion: @escaping (Result<T, Error>) -> Void
+    ) {
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            // Network error or missing data
             if let error = error {
-                return DispatchQueue.main.async { completion([]) }
+                print("Network error:", error)
+                return DispatchQueue.main.async { completion(.failure(error)) }
             }
             guard let data = data else {
-                return DispatchQueue.main.async { completion([]) }
+                let err = NSError(
+                    domain: "DataService",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "No data received"]
+                )
+                return DispatchQueue.main.async { completion(.failure(err)) }
             }
+
+            // Decode JSON
             do {
-                let resp = try JSONDecoder().decode(TransactionsResponse.self, from: data)
-                DispatchQueue.main.async { completion(resp.transactions) }
+                let decoded = try JSONDecoder().decode(T.self, from: data)
+                DispatchQueue.main.async { completion(.success(decoded)) }
             } catch {
-                DispatchQueue.main.async { completion([]) }
+                print("Decoding error:", error)
+                DispatchQueue.main.async { completion(.failure(error)) }
             }
         }
         .resume()
     }
-    static func loadTransactionsBetween(
-            accessToken: String,
-            startDate: String,
-            endDate: String,
-            completion: @escaping ([Transaction]) -> Void
-        ) {
-            // Build URLComponents for GET /transactions?access_token=…&start_date=…&end_date=…
-            var comps = URLComponents(string: "http://192.168.0.87:5050/transactions")!
-            comps.queryItems = [
-                URLQueryItem(name: "access_token", value: accessToken),
-                URLQueryItem(name: "start_date", value: startDate),
-                URLQueryItem(name: "end_date", value: endDate)
-            ]
-            guard let url = comps.url else {
-                return DispatchQueue.main.async { completion([]) }
-            }
-
-            URLSession.shared.dataTask(with: url) { data, _, error in
-                if let _ = error {
-                    return DispatchQueue.main.async { completion([]) }
-                }
-                guard let data = data else {
-                    return DispatchQueue.main.async { completion([]) }
-                }
-                do {
-                    let resp = try JSONDecoder().decode(TransactionsResponse.self, from: data)
-                    DispatchQueue.main.async { completion(resp.transactions) }
-                } catch {
-                    DispatchQueue.main.async { completion([]) }
-                }
-            }
-            .resume()
-        }
 }
+
 
 
 
