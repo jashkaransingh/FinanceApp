@@ -8,14 +8,11 @@
 import UIKit
 import Foundation
 
-
-import Foundation
-
 /// Encapsulates all network calls to your backend.
 class DataService {
-
+    
     // MARK: – Public API
-
+    
     /// Fetches account summaries for the connected bank.
     /// - Parameters:
     ///   - accessToken: Plaid access token for authentication.
@@ -30,7 +27,7 @@ class DataService {
         ) else {
             return DispatchQueue.main.async { completion([]) }
         }
-
+        
         performRequest(url: url, decodeTo: SummariesResponse.self) { result in
             switch result {
             case .success(let wrapper):
@@ -40,7 +37,7 @@ class DataService {
             }
         }
     }
-
+    
     /// Fetches transactions for a given period (today/week/month).
     static func loadTransactions(
         accessToken: String,
@@ -53,7 +50,7 @@ class DataService {
         ) else {
             return DispatchQueue.main.async { completion([]) }
         }
-
+        
         performRequest(url: url, decodeTo: TransactionsResponse.self) { result in
             switch result {
             case .success(let resp):
@@ -63,7 +60,7 @@ class DataService {
             }
         }
     }
-
+    
     /// Fetches transactions between two dates.
     static func loadTransactions(
         accessToken: String,
@@ -81,7 +78,7 @@ class DataService {
         ) else {
             return DispatchQueue.main.async { completion([]) }
         }
-
+        
         performRequest(url: url, decodeTo: TransactionsResponse.self) { result in
             switch result {
             case .success(let resp):
@@ -91,9 +88,9 @@ class DataService {
             }
         }
     }
-
+    
     // MARK: – Private Helpers
-
+    
     /// Generic executor for GET requests that decode JSON into the given model.
     private static func performRequest<T: Decodable>(
         url: URL,
@@ -114,7 +111,7 @@ class DataService {
                 )
                 return DispatchQueue.main.async { completion(.failure(err)) }
             }
-
+            
             // Decode JSON
             do {
                 let decoded = try JSONDecoder().decode(T.self, from: data)
@@ -125,6 +122,36 @@ class DataService {
             }
         }
         .resume()
+    }
+    static func fetchAISummary(
+        budget: Int = 100,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        guard let url = API.makeURL(path: "/ai/weekly_summary") else {
+            return completion(.failure(NSError(domain: "URL", code: -1)))
+        }
+        
+        let body: [String: Any] = [
+            "weekly_budget": budget,
+            "transactions": []  // Empty for now or fetch recent ones if needed
+        ]
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        URLSession.shared.dataTask(with: request) { data, _, error in
+            if let error = error {
+                return completion(.failure(error))
+            }
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let suggestion = json["suggestion"] as? [String: Any] else {
+                return completion(.failure(NSError(domain: "Invalid format", code: 0)))
+            }
+            completion(.success(suggestion))
+        }.resume()
     }
 }
 

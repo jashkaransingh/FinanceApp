@@ -5,6 +5,7 @@ import config
 from routes.auth         import auth_bp
 from routes.transactions import tx_bp
 from routes.sandbox      import sb_bp
+import routes.ai as ai_module
 
 # MARK: – Application Setup
 
@@ -23,6 +24,8 @@ app.register_blueprint(tx_bp)
 
 # Sandbox‐only endpoints: /sandbox/sandbox_refresh
 app.register_blueprint(sb_bp, url_prefix="/sandbox")
+
+app.register_blueprint(ai_module.ai_bp)
 
 
 # MARK: – Health Check & Miscellaneous Routes

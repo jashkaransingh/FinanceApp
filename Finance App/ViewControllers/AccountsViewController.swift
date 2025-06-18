@@ -258,18 +258,21 @@ class AccountsViewController: UIViewController {
     
     // MARK: – Actions
     @objc private func fabTapped() {
-        print("💡 fabTapped called")
-        PlaidService.shared.startPlaidLink(
-            from: self,
-            onSuccess: { [weak self] in
-                guard let self = self else { return }
-                self.needsRefresh = true
-                self.loadSummariesAndShowCards()
-            },
-            onError: { error in
-                print("Plaid flow failed:", error)
-            }
-        )
+//        print("💡 fabTapped called")
+//        PlaidService.shared.startPlaidLink(
+//            from: self,
+//            onSuccess: { [weak self] in
+//                guard let self = self else { return }
+//                self.needsRefresh = true
+//                self.loadSummariesAndShowCards()
+//            },
+//            onError: { error in
+//                print("Plaid flow failed:", error)
+//            }
+//        )
+        let vc = BudgetAIViewController()
+        navigationController?.pushViewController(vc, animated: true)
+
     }
     
     @objc private func cardTapped(_ card: AccountCardView) {
