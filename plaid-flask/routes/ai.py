@@ -7,35 +7,44 @@ ai_bp = Blueprint("ai", __name__)
 
 @ai_bp.route("/ai/weekly_summary", methods=["POST"])
 def weekly_summary():
-    data = request.get_json()
-    transactions = data.get("transactions", [])
-    budget = data.get("weekly_budget", 100)
-    user_id = data.get("user_id", "anonymous")  # You can send Firebase UID here
+    # 1️⃣ Parse JSON body from request
+    data = request.get_json(force=True)
 
-    # ⏪ Try to load from cache first
-    cached = get_cached_summary(user_id)
+    # 2️⃣ Extract fields
+    transactions = data.get("transactions", [])
+    budget       = data.get("weekly_budget", 100)
+    user_id      = data.get("user_id", "anonymous")
+
+    # 3️⃣ Construct cache key
+    cache_key = f"{user_id}:{budget}"
+    cached = get_cached_summary(cache_key)
     if cached:
         return jsonify(suggestion=cached)
 
-    # 🧠 If not cached, build a prompt and call Gemini
+    # 4️⃣ Build prompt for Gemini
     history = "\n".join(f"{tx['name']} - ${tx['amount']}" for tx in transactions)
     prompt = (
-        f"Based on the following past transactions:\n\n{history}\n\n"
+        f"Based on the following past transactions:\n{history}\n\n"
         f"And a weekly budget of ${budget}, generate a breakdown of how I could spend this week. "
-        f"Include quantities, categories, and amounts. Format your response as a clean JSON like:\n\n"
-        "{ 'subway': 2, 'mcdonalds': 3, 'bars': '$20', 'groceries': '$30' }\n"
+        "I want **only** a JSON object mapping categories to amounts (e.g. "
+        "{ 'subway': 2, 'groceries': 30, 'bars': 20 }). "
+        "Do **not** include any additional fields like notes or summary."
     )
 
+    # 5️⃣ Call Gemini and parse
     try:
-        raw = call_gemini(prompt)
-        cleaned = raw.strip().removeprefix("```json").removesuffix("```").strip()
+        raw = call_gemini(prompt).strip()
+
+        # Remove markdown formatting (```json / json / ```)
+        lines = raw.splitlines()
+        json_lines = [line for line in lines if not line.strip().startswith("```") and line.strip() != "json"]
+        cleaned = "\n".join(json_lines).strip()
+
         parsed = json.loads(cleaned)
-    except Exception:
-        return jsonify(error="AI response was not valid JSON"), 500
+    except Exception as e:
+        print("❌ [weekly_summary] error parsing AI response:", e)
+        parsed = {}
 
-    # ✅ Cache the result
-    set_cached_summary(user_id, parsed)
-
+    # 6️⃣ Cache and return result
+    set_cached_summary(cache_key, parsed)
     return jsonify(suggestion=parsed)
-
-# structure - iOS App → /ai/weekly_summary → Flask → Gemini → Spending Breakdown → iOS

@@ -132,9 +132,15 @@ class DataService {
         }
         
         let body: [String: Any] = [
-            "weekly_budget": budget,
-            "transactions": []  // Empty for now or fetch recent ones if needed
+            "weekly_budget": budget,   // <-- ensure this matches your server’s expectation
+            "transactions": []
         ]
+        
+        // — DEBUG: show exactly what you’re sending —
+        if let jsonData = try? JSONSerialization.data(withJSONObject: body, options: [.prettyPrinted]),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            print("📤 [AI Request] \(url)\n\(jsonString)")
+        }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

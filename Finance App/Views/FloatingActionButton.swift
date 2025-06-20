@@ -18,8 +18,8 @@ class FloatingActionButton: UIButton {
       backgroundColor = .label // black button with white plus
     tintColor = .systemBackground
     let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .bold)
-    let plusImage = UIImage(systemName: "plus", withConfiguration: config)
-    setImage(plusImage, for: .normal)
+    let intelligence = UIImage(systemName: "apple.intelligence", withConfiguration: config)
+    setImage(intelligence, for: .normal)
     layer.cornerRadius = 28    // half of width/height
     layer.shadowColor = UIColor.black.cgColor
     layer.shadowOpacity = 0.2
