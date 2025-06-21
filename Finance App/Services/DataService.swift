@@ -50,7 +50,6 @@ class DataService {
         ) else {
             return DispatchQueue.main.async { completion([]) }
         }
-        
         performRequest(url: url, decodeTo: TransactionsResponse.self) { result in
             switch result {
             case .success(let resp):
@@ -89,10 +88,74 @@ class DataService {
         }
     }
     
-    // MARK: – Private Helpers
+    static func fetchAISummary(// Sends user transactions + budget to Gemini backend for AI-generated recommendations
+        payload: [String: Any],
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        guard let url = API.makeURL(path: "/ai/weekly_summary") else {
+            return completion(.failure(NSError(domain: "URL", code: -1)))
+        }
+        
+#if DEBUG
+        if let jsonData = try? JSONSerialization.data(withJSONObject: payload, options: .prettyPrinted),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            print("📤 [AI Payload] \(url)\n\(jsonString)")
+        }
+#endif
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        
+        URLSession.shared.dataTask(with: request) { data, _, error in
+            if let error = error {
+                return completion(.failure(error))
+            }
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let suggestion = json["suggestion"] as? [String: Any] else {
+                return completion(.failure(NSError(domain: "Invalid format", code: 0)))
+            }
+            completion(.success(suggestion))
+        }.resume()
+    }
     
-    /// Generic executor for GET requests that decode JSON into the given model.
-    private static func performRequest<T: Decodable>(
+    static func fetchMerchantAISummary(// Sends normalized merchant spend data + budget to Gemini for AI-budget breakdown
+        merchantBudgets: [String:Int],
+        budget: Int,
+        completion: @escaping (Result<[String:Any],Error>) -> Void
+    ) {
+        guard let url = API.makeURL(path: "/ai/weekly_summary") else {
+            return completion(.failure(NSError(domain:"URL", code:-1)))
+        }
+        
+        // include both merchant_budgets *and* weekly_budget
+        let body: [String:Any] = [
+            "merchant_budgets": merchantBudgets,
+            "weekly_budget": budget
+        ]
+        
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField:"Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject:body)
+        
+        URLSession.shared.dataTask(with: req) { data, _, err in
+            if let err = err { return completion(.failure(err)) }
+            guard
+                let data = data,
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String:Any],
+                let suggestion = json["suggestion"] as? [String:Any]
+            else {
+                return completion(.failure(NSError(domain:"InvalidFormat", code:0)))
+            }
+            completion(.success(suggestion))
+        }.resume()
+    }
+    
+    // MARK: – Private Helpers
+    private static func performRequest<T: Decodable>(/// Generic executor for GET requests that decode JSON into the given model
         url: URL,
         decodeTo type: T.Type,
         completion: @escaping (Result<T, Error>) -> Void
@@ -123,42 +186,7 @@ class DataService {
         }
         .resume()
     }
-    static func fetchAISummary(
-        budget: Int = 100,
-        completion: @escaping (Result<[String: Any], Error>) -> Void
-    ) {
-        guard let url = API.makeURL(path: "/ai/weekly_summary") else {
-            return completion(.failure(NSError(domain: "URL", code: -1)))
-        }
-        
-        let body: [String: Any] = [
-            "weekly_budget": budget,   // <-- ensure this matches your server’s expectation
-            "transactions": []
-        ]
-        
-        // — DEBUG: show exactly what you’re sending —
-        if let jsonData = try? JSONSerialization.data(withJSONObject: body, options: [.prettyPrinted]),
-           let jsonString = String(data: jsonData, encoding: .utf8) {
-            print("📤 [AI Request] \(url)\n\(jsonString)")
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        
-        URLSession.shared.dataTask(with: request) { data, _, error in
-            if let error = error {
-                return completion(.failure(error))
-            }
-            guard let data = data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let suggestion = json["suggestion"] as? [String: Any] else {
-                return completion(.failure(NSError(domain: "Invalid format", code: 0)))
-            }
-            completion(.success(suggestion))
-        }.resume()
-    }
+    
 }
 
 

@@ -202,24 +202,6 @@ class AccountsViewController: UIViewController {
                 }
                 self.needsRefresh = false//Now that UI is drawn, mark needsRefresh = false
             }
-        
-        //        let docRef = Firestore.firestore().collection("users").document(uid)
-        //        docRef.getDocument { snapshot, error in
-        //            if let data = snapshot?.data(),
-        //               let token = data["bankAccessToken"] as? String
-        //            {
-        //                // They’ve linked before: save locally & load the real cards
-        //                self.accessToken = token
-        //                self.loadSummariesAndShowCards()
-        //                // 2) Now that UI is drawn, mark needsRefresh = false
-        //                self.needsRefresh = false  // ← HERE
-        //            } else {
-        //                // No token in Firestore → show the “Connect Bank” button
-        //                self.showConnectBankPlaceholder()
-        //                // 2) We just drew the placeholder UI, so mark needsRefresh = false
-        //                self.needsRefresh = false  // ← HERE
-        //            }
-        //        }
     }
     
     /// Remove “Connect Bank” button, fetch from backend, then render cards
@@ -258,19 +240,8 @@ class AccountsViewController: UIViewController {
     
     // MARK: – Actions
     @objc private func fabTapped() {
-//        print("💡 fabTapped called")
-//        PlaidService.shared.startPlaidLink(
-//            from: self,
-//            onSuccess: { [weak self] in
-//                guard let self = self else { return }
-//                self.needsRefresh = true
-//                self.loadSummariesAndShowCards()
-//            },
-//            onError: { error in
-//                print("Plaid flow failed:", error)
-//            }
-//        )
         let vc = BudgetAIViewController()
+        vc.accessToken = accessToken
         navigationController?.pushViewController(vc, animated: true)
 
     }

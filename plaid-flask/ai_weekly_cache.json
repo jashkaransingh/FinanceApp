@@ -153,5 +153,101 @@
       "coffee": 20,
       "unexpected": 30
     }
+  },
+  "merchant:{}": {
+    "2025-W25": {
+      "Amazon": 50,
+      "Target": 75,
+      "Walmart": 100,
+      "Costco": 120,
+      "Kroger": 80,
+      "McDonald's": 30,
+      "Starbucks": 40,
+      "Shell": 60,
+      "Chevron": 55,
+      "Netflix": 15
+    }
+  },
+  "merchant:{\"ACH Electronic CreditGUSTO PAY 123456\": 1950, \"CD DEPOSIT .INITIAL.\": 333, \"CREDIT CARD 3333 PAYMENT *//\": 8, \"INTRST PYMNT\": -1, \"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2, \"United Airlines\": -83}": {
+    "2025-W25": {
+      "SparkFun": 30,
+      "United Airlines": 0,
+      "ACH Electronic CreditGUSTO PAY 123456": 1950,
+      "McDonald's": 5,
+      "CD DEPOSIT .INITIAL.": 333,
+      "Starbucks": 5,
+      "Touchstone Climbing": 26,
+      "INTRST PYMNT": 0,
+      "CREDIT CARD 3333 PAYMENT *//*": 8,
+      "Uber 063015 SF**POOL**": 5
+    }
+  },
+  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}": {
+    "2025-W25": {
+      "Uber 063015 SF**POOL**": 5,
+      "Touchstone Climbing": 30,
+      "SparkFun": 30,
+      "Starbucks": 5,
+      "McDonald's": 10
+    }
+  },
+  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:100": {
+    "2025-W25": {
+      "Uber": 30.0,
+      "Starbucks": 20.0,
+      "McDonalds": 15.0,
+      "Target": 35.0
+    }
+  },
+  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:150": {
+    "2025-W25": {
+      "Uber": 30.0,
+      "Starbucks": 20.0,
+      "Lyft": 25.0,
+      "Target": 75.0
+    }
+  },
+  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:200": {
+    "2025-W25": {
+      "Uber": 30.0,
+      "Starbucks": 20.0,
+      "Grocery Store": 50.0
+    }
+  },
+  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:250": {
+    "2025-W25": {
+      "Uber": 50,
+      "Starbucks": 30,
+      "OtherMerchant": 20
+    }
+  },
+  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:310": {
+    "2025-W25": {
+      "Uber": 50.0,
+      "Starbucks": 25.0,
+      "Lyft": 25.0
+    }
+  },
+  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:70": {
+    "2025-W25": {
+      "Uber": 50,
+      "Starbucks": 30,
+      "OtherMerchant": 20
+    }
+  },
+  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:190": {
+    "2025-W25": {
+      "Uber": 50.0,
+      "Starbucks": 25.0,
+      "OtherMerchant": 25.0
+    }
+  },
+  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:120": {
+    "2025-W25": {
+      "Uber": 2.4,
+      "Starbucks": 1.2,
+      "SparkFun": 36.0,
+      "Touchstone Climbing": 31.2
+    }
   }
 }
