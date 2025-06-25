@@ -186,7 +186,45 @@ class DataService {
         }
         .resume()
     }
-    
+    /// Sends the current budget plan to the backend for intelligent reallocation by the AI.
+    static func fetchAIReallocation(
+        transactions: [Transaction],
+        currentPlan: [String: Any],
+        lockedCategory: String,
+        newValue: Int,
+        totalBudget: Int,
+        completion: @escaping (Result<[String: Any], Error>) -> Void
+    ) {
+        guard let url = API.makeURL(path: "/ai/weekly_summary") else {
+            return completion(.failure(NSError(domain: "URL", code: -1)))
+        }
+        
+        // Create the new, more detailed payload
+        let payload: [String: Any] = [
+            "transactions": transactions.map { ["name": $0.name, "amount": $0.amount] },
+            "current_plan": currentPlan,
+            "locked_category": lockedCategory,
+            "new_value": newValue,
+            "total_budget": totalBudget
+        ]
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        
+        URLSession.shared.dataTask(with: request) { data, _, error in
+            if let error = error {
+                return completion(.failure(error))
+            }
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let suggestion = json["suggestion"] as? [String: Any] else {
+                return completion(.failure(NSError(domain: "InvalidFormat", code: 0)))
+            }
+            completion(.success(suggestion))
+        }.resume()
+    }
 }
 
 

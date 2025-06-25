@@ -236,11 +236,31 @@ class AccountsViewController: UIViewController {
             
             stackView.addArrangedSubview(card)//add the card to the stackView
         }
+//        let card = WalletCardView()
+//        card.translatesAutoresizingMaskIntoConstraints = false
+//        card.configure(
+//          bankName:      "Bank of America",
+//          cardholder:    "Noor Singh",
+//          maskedNumber:  "•••• 1234",
+//          expiry:        "08/27",
+//          balance:       2_345.67,
+//          gradientColors:[
+//            UIColor(red: 0.05, green: 0.45, blue: 0.85, alpha: 1),
+//            UIColor(red: 0.15, green: 0.65, blue: 0.95, alpha: 1)
+//          ]
+//        )
+//        stackView.addArrangedSubview(card)
+//
+//        // if in a vertical UIStackView, constrain height:
+//        NSLayoutConstraint.activate([
+//          card.heightAnchor.constraint(equalToConstant: 200)
+//        ])
+
     }
     
     // MARK: – Actions
     @objc private func fabTapped() {
-        let vc = BudgetAIViewController()
+        let vc = BudgetAssistantViewController()
         vc.accessToken = accessToken
         navigationController?.pushViewController(vc, animated: true)
 

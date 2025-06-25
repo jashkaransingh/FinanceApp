@@ -1,253 +1,165 @@
 {
-  "anonymous": {
-    "2025-W25": {
-      "subway": 2,
-      "mcdonalds": 3,
-      "bars": "$20",
-      "groceries": "$30"
-    }
-  },
-  "anonymous:50": {
-    "2025-W25": {
-      "groceries": "$25",
-      "subway": 1,
-      "mcdonalds": 2,
-      "coffee": "$5",
-      "entertainment": "$10"
-    }
-  },
-  "anonymous:80": {
-    "2025-W25": {
-      "groceries": "$35",
-      "subway": 1,
-      "mcdonalds": 2,
-      "coffee": 3,
-      "entertainment": "$15"
+  "anonymous:200": {
+    "2025-W26": {
+      "Food": {
+        "amount": 30,
+        "percent": 15,
+        "subtitle": "McDonald's, Starbucks, KFC"
+      },
+      "Transportation": {
+        "amount": 20,
+        "percent": 10,
+        "subtitle": "Uber, United Airlines"
+      },
+      "Recreation": {
+        "amount": 20,
+        "percent": 10,
+        "subtitle": "Touchstone Climbing"
+      },
+      "Shopping": {
+        "amount": 30,
+        "percent": 15,
+        "subtitle": "SparkFun, Bicycle Shop"
+      },
+      "Debt Payments": {
+        "amount": 50,
+        "percent": 25,
+        "subtitle": "Credit Card Payment"
+      },
+      "Savings/Emergency": {
+        "amount": 50,
+        "percent": 25,
+        "subtitle": "rainy day fund"
+      }
     }
   },
   "anonymous:100": {
-    "2025-W25": {
-      "groceries": 35,
-      "eating_out": 20,
-      "subscriptions": 15,
-      "transportation": 20,
-      "entertainment": 10
-    }
-  },
-  "anonymous:40": {
-    "2025-W25": {
-      "weekly_budget": 40,
-      "spending_plan": [
-        {
-          "category": "Groceries",
-          "amount": 20,
-          "quantity": "Variable, depending on prices",
-          "description": "Focus on affordable staples like rice, beans, pasta, vegetables, and maybe some chicken if budget allows. Prioritize making meals at home."
-        },
-        {
-          "category": "Transportation",
-          "amount": 10,
-          "quantity": "Approximately 2-3 trips",
-          "description": "Limit travel if possible. Prioritize walking or biking for short distances. Use public transportation if available and cost-effective over ride-sharing."
-        },
-        {
-          "category": "Coffee/Snacks",
-          "amount": 5,
-          "quantity": "1-2",
-          "description": "Reduce frequency of purchasing coffee or snacks. Consider making coffee at home. Only buy if absolutely needed"
-        },
-        {
-          "category": "Entertainment/Discretionary",
-          "amount": 5,
-          "quantity": "minimal",
-          "description": "Dedicate a small amount for inexpensive entertainment or discretionary purchases (e.g., streaming service, library books). Consider free activities like hiking or visiting parks."
-        }
-      ],
-      "notes": "This budget prioritizes essential needs based on past spending.  Adjust amounts based on your specific needs and upcoming events.  Track your spending closely to stay within budget."
-    }
-  },
-  "anonymous:20": {
-    "2025-W25": {
-      "weekly_budget": 20.0,
-      "spending_plan": [
-        {
-          "category": "Groceries",
-          "item": "Basic Staples (Rice, Beans, Eggs)",
-          "quantity": "Sufficient for 3-4 meals",
-          "amount": 10.0,
-          "notes": "Prioritize affordable staples to maximize meal count. Check for sales and consider buying in bulk if feasible."
-        },
-        {
-          "category": "Transportation",
-          "item": "Public Transport/Fuel",
-          "quantity": "Necessary trips only",
-          "amount": 5.0,
-          "notes": "Limit non-essential travel. Consider walking or biking when possible.  If driving, consolidate errands."
-        },
-        {
-          "category": "Entertainment/Discretionary",
-          "item": "Small Treat/Relaxation",
-          "quantity": "Once",
-          "amount": 5.0,
-          "notes": "Allocate a small amount for a simple pleasure (e.g., a coffee, a used book, a streaming service subscription). Consider free or low-cost alternatives like borrowing from the library or attending free community events."
-        }
-      ]
+    "2025-W26": {
+      "Food": {
+        "amount": 20,
+        "percent": 20,
+        "subtitle": "McDonald's, Starbucks, KFC"
+      },
+      "Transportation": {
+        "amount": 15,
+        "percent": 15,
+        "subtitle": "Uber, United Airlines"
+      },
+      "Recreation": {
+        "amount": 10,
+        "percent": 10,
+        "subtitle": "Touchstone Climbing"
+      },
+      "Shopping": {
+        "amount": 10,
+        "percent": 10,
+        "subtitle": "SparkFun, Bicycle Shop"
+      },
+      "Debt Payments": {
+        "amount": 25,
+        "percent": 25,
+        "subtitle": "Credit Card Payment"
+      },
+      "Savings": {
+        "amount": 20,
+        "percent": 20,
+        "subtitle": "CD Deposit"
+      }
     }
   },
   "anonymous:90": {
-    "2025-W25": {
-      "weeklyBudget": 90,
-      "spendingPlan": [
-        {
-          "category": "Groceries",
-          "amount": 35,
-          "quantity": "Variable",
-          "notes": "Focus on affordable staples like pasta, rice, beans, and seasonal vegetables. Plan meals in advance to avoid impulse buys."
-        },
-        {
-          "category": "Transportation",
-          "amount": 20,
-          "quantity": "Variable",
-          "notes": "Prioritize public transportation or cycling. Consolidate trips to save on fuel if driving is necessary."
-        },
-        {
-          "category": "Coffee/Snacks Out",
-          "amount": 10,
-          "quantity": 2,
-          "notes": "Limit to 2 small coffee purchases or inexpensive snacks. Consider making coffee at home to save money."
-        },
-        {
-          "category": "Entertainment",
-          "amount": 15,
-          "quantity": "Variable",
-          "notes": "Look for free activities like visiting parks, museums on free days, or attending community events. Consider renting a movie instead of going to the cinema."
-        },
-        {
-          "category": "Miscellaneous/Buffer",
-          "amount": 10,
-          "quantity": "N/A",
-          "notes": "This is a buffer for unexpected expenses or small discretionary purchases. Try to avoid using it unless absolutely necessary."
-        }
-      ]
+    "2025-W26": {
+      "Food & Drink": {
+        "amount": 21,
+        "percent": 23,
+        "subtitle": "McDonald's, Starbucks, KFC"
+      },
+      "Transportation": {
+        "amount": 12,
+        "percent": 13,
+        "subtitle": "Uber, United Airlines"
+      },
+      "Recreation": {
+        "amount": 17,
+        "percent": 19,
+        "subtitle": "Touchstone Climbing"
+      },
+      "Shopping": {
+        "amount": 14,
+        "percent": 16,
+        "subtitle": "SparkFun"
+      },
+      "Debt Payments": {
+        "amount": 26,
+        "percent": 29,
+        "subtitle": "Credit Card Payment"
+      }
     }
   },
-  "anonymous:200": {
-    "2025-W25": {
-      "groceries": 60,
-      "eating_out": 30,
-      "coffee": 20,
-      "subway": 30,
-      "entertainment": 30,
-      "misc": 30
+  "reallocate:{\"Debt Payments\": {\"amount\": 25}, \"Food\": {\"amount\": 44}, \"Recreation\": {\"amount\": 10}, \"Savings\": {\"amount\": 20}, \"Shopping\": {\"amount\": 10}, \"Transportation\": {\"amount\": 15}}:lock:Food:44": {
+    "2025-W26": {
+      "Recreation": {
+        "amount": 9
+      },
+      "Debt Payments": {
+        "amount": 24
+      },
+      "Savings": {
+        "amount": 19
+      },
+      "Food": {
+        "amount": 44
+      },
+      "Transportation": {
+        "amount": 14
+      },
+      "Shopping": {
+        "amount": 10
+      }
     }
   },
-  "anonymous:270": {
-    "2025-W25": {
-      "groceries": 80,
-      "rent": 0,
-      "utilities": 0,
-      "eating_out": 40,
-      "transportation": 30,
-      "entertainment": 40,
-      "subscriptions": 30,
-      "coffee": 20,
-      "unexpected": 30
+  "reallocate:{\"Debt Payments\": {\"amount\": 24}, \"Food\": {\"amount\": 44}, \"Recreation\": {\"amount\": 9}, \"Savings\": {\"amount\": 19}, \"Shopping\": {\"amount\": 10}, \"Transportation\": {\"amount\": 14}}:lock:Food:54": {
+    "2025-W26": {
+      "Food": {
+        "amount": 54
+      },
+      "Savings": {
+        "amount": 15
+      },
+      "Recreation": {
+        "amount": 5
+      },
+      "Transportation": {
+        "amount": 12
+      },
+      "Shopping": {
+        "amount": 4
+      },
+      "Debt Payments": {
+        "amount": 10
+      }
     }
   },
-  "merchant:{}": {
-    "2025-W25": {
-      "Amazon": 50,
-      "Target": 75,
-      "Walmart": 100,
-      "Costco": 120,
-      "Kroger": 80,
-      "McDonald's": 30,
-      "Starbucks": 40,
-      "Shell": 60,
-      "Chevron": 55,
-      "Netflix": 15
-    }
-  },
-  "merchant:{\"ACH Electronic CreditGUSTO PAY 123456\": 1950, \"CD DEPOSIT .INITIAL.\": 333, \"CREDIT CARD 3333 PAYMENT *//\": 8, \"INTRST PYMNT\": -1, \"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2, \"United Airlines\": -83}": {
-    "2025-W25": {
-      "SparkFun": 30,
-      "United Airlines": 0,
-      "ACH Electronic CreditGUSTO PAY 123456": 1950,
-      "McDonald's": 5,
-      "CD DEPOSIT .INITIAL.": 333,
-      "Starbucks": 5,
-      "Touchstone Climbing": 26,
-      "INTRST PYMNT": 0,
-      "CREDIT CARD 3333 PAYMENT *//*": 8,
-      "Uber 063015 SF**POOL**": 5
-    }
-  },
-  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}": {
-    "2025-W25": {
-      "Uber 063015 SF**POOL**": 5,
-      "Touchstone Climbing": 30,
-      "SparkFun": 30,
-      "Starbucks": 5,
-      "McDonald's": 10
-    }
-  },
-  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:100": {
-    "2025-W25": {
-      "Uber": 30.0,
-      "Starbucks": 20.0,
-      "McDonalds": 15.0,
-      "Target": 35.0
-    }
-  },
-  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:150": {
-    "2025-W25": {
-      "Uber": 30.0,
-      "Starbucks": 20.0,
-      "Lyft": 25.0,
-      "Target": 75.0
-    }
-  },
-  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:200": {
-    "2025-W25": {
-      "Uber": 30.0,
-      "Starbucks": 20.0,
-      "Grocery Store": 50.0
-    }
-  },
-  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:250": {
-    "2025-W25": {
-      "Uber": 50,
-      "Starbucks": 30,
-      "OtherMerchant": 20
-    }
-  },
-  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:310": {
-    "2025-W25": {
-      "Uber": 50.0,
-      "Starbucks": 25.0,
-      "Lyft": 25.0
-    }
-  },
-  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:70": {
-    "2025-W25": {
-      "Uber": 50,
-      "Starbucks": 30,
-      "OtherMerchant": 20
-    }
-  },
-  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:190": {
-    "2025-W25": {
-      "Uber": 50.0,
-      "Starbucks": 25.0,
-      "OtherMerchant": 25.0
-    }
-  },
-  "merchant:{\"McDonald's\": 4, \"SparkFun\": 30, \"Starbucks\": 1, \"Touchstone Climbing\": 26, \"Uber 063015 SF**POOL**\": 2}:budget:120": {
-    "2025-W25": {
-      "Uber": 2.4,
-      "Starbucks": 1.2,
-      "SparkFun": 36.0,
-      "Touchstone Climbing": 31.2
+  "reallocate:{\"Debt Payments\": {\"amount\": 10}, \"Food\": {\"amount\": 51}, \"Recreation\": {\"amount\": 5}, \"Savings\": {\"amount\": 15}, \"Shopping\": {\"amount\": 4}, \"Transportation\": {\"amount\": 12}}:lock:Food:51": {
+    "2025-W26": {
+      "Recreation": {
+        "amount": 4
+      },
+      "Debt Payments": {
+        "amount": 10
+      },
+      "Savings": {
+        "amount": 14
+      },
+      "Food": {
+        "amount": 51
+      },
+      "Transportation": {
+        "amount": 11
+      },
+      "Shopping": {
+        "amount": 10
+      }
     }
   }
 }
