@@ -7,19 +7,41 @@
 
 import Foundation
 
-enum API {/// Common path and URL helpers for all API endpoints
-    /// The host portion of every request.
+/// Defines all backend endpoints.
+enum API {
+    // This host should point to your Flask server's address.
+    // Make sure this is configured correctly in your Environment.
     static let host = Environment.baseURL
-
-    /// Builds a URL with the given path and query items.
-    /// - Parameters:
-    ///   - path: Endpoint path (e.g. "/summaries")
-    ///   - queries: Optional dictionary of query parameters.
-    /// - Returns: A `URL` or `nil` if invalid.
-    static func makeURL(path: String, queries: [String: String]? = nil) -> URL? {
-        var comps = URLComponents(string: host + path)
-        comps?.queryItems = queries?.map { URLQueryItem(name: $0.key, value: $0.value) }
-        return comps?.url
+    
+    case createLinkToken
+    case exchangePublicToken
+    case removeItem
+    case transactions
+    case summaries
+    case aiSummary
+    case budget
+    
+    /// Returns the full URL for the given endpoint.
+    var url: URL {
+        let path: String
+        switch self {
+        case .createLinkToken:
+            path = "/auth/create_link_token"
+        case .exchangePublicToken:
+            path = "/auth/exchange_public_token"
+        case .removeItem:
+            path = "/auth/remove_item"
+        case .transactions:
+            path = "/transactions"
+        case .summaries:
+            path = "/summaries"
+        case .aiSummary:
+            path = "/ai/weekly_summary"
+        case .budget:
+            path = "/budget"
+            
+        }
+        return URL(string: API.host + path)!
     }
 }
 

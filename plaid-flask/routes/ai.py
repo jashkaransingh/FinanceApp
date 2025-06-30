@@ -2,90 +2,164 @@
 
 import os
 import json
+import traceback
 from flask import Blueprint, request, jsonify, current_app
+from firebase_admin import auth, firestore
 from utils.gemini_client import call_gemini
 from utils.cache_manager  import get_cached_summary, set_cached_summary
 
 ai_bp = Blueprint("ai", __name__)
 
+# --- NEW: Endpoint to get a user's saved budget plan ---
+@ai_bp.route("/budget", methods=["GET"])
+def get_budget():
+    """
+    Retrieves the saved budget plan for the authenticated user from Firestore.
+    """
+    try:
+        # 1. Verify user's identity
+        id_token = request.headers.get('Authorization').split('Bearer ')[1]
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        
+        # 2. Access Firestore and get the user's document
+        db = firestore.client()
+        user_ref = db.collection('users').document(uid)
+        user_doc = user_ref.get()
+        
+        if user_doc.exists:
+            user_data = user_doc.to_dict()
+            # 3. Check if a budget plan exists and return it
+            if 'budgetPlan' in user_data:
+                return jsonify(
+                    budgetPlan=user_data['budgetPlan'],
+                    totalBudget=user_data.get('totalBudget', 0)
+                ), 200
+        
+        # 4. If no plan exists, return a clear response
+        return jsonify(message="No budget plan found for user."), 404
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(error=str(e)), 500
+
+
+# --- NEW: Endpoint to save a user's budget plan ---
+@ai_bp.route("/budget", methods=["POST"])
+def save_budget():
+    """
+    Saves a budget plan for the authenticated user to Firestore.
+    """
+    try:
+        # 1. Verify user's identity
+        id_token = request.headers.get('Authorization').split('Bearer ')[1]
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        
+        # 2. Get the plan from the request body
+        data = request.get_json(force=True)
+        budget_plan = data.get("budgetPlan")
+        total_budget = data.get("totalBudget")
+
+        if not budget_plan or total_budget is None:
+            return jsonify(error="Missing 'budgetPlan' or 'totalBudget' in request body."), 400
+            
+        # 3. Access Firestore and update the user's document
+        db = firestore.client()
+        user_ref = db.collection('users').document(uid)
+        user_ref.update({
+            'budgetPlan': budget_plan,
+            'totalBudget': total_budget
+        })
+        
+        print(f"✅ Budget plan saved for user {uid}")
+        return jsonify(success=True), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(error=str(e)), 500
+
 @ai_bp.route("/ai/weekly_summary", methods=["POST"])
 def weekly_summary():
+    """
+    Generates or reallocates a budget plan using the AI.
+    This endpoint is now secured with Firebase Auth.
+    """
+    try:
+        # 1. Verify user's identity (This was missing before)
+        id_token = request.headers.get('Authorization').split('Bearer ')[1]
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        print(f"✅ Verified user for AI summary: {uid}")
+
+    except Exception as e:
+        return jsonify(error="Invalid or missing Authorization token.", details=str(e)), 401
+    
     # 1. Parse the incoming JSON from the app
     data = request.get_json(force=True)
     print("▶️ [weekly_summary] raw request JSON:", data) 
 
-    # 2. Check if this is a reallocation request or an initial request
+    transactions = data.get("transactions", [])
+    history = "\n".join(f"- {tx['name']}: ${tx['amount']:.2f}" for tx in transactions)
+    total_budget = data.get("total_budget") or data.get("weekly_budget", 100)
+    
+    base_prompt = f"""
+    You are a helpful budgeting assistant. Given the following transaction history and a total weekly budget of ${total_budget}, create a suggested spending plan.
+    ---
+    Transaction History:
+    {history}
+    ---
+    """
+    
+    # The cache key needs to uniquely identify the request.
+    # We start with the user's secure ID and their total budget.
+    cache_key_parts = [uid, str(total_budget)]
+
     if "locked_category" in data:
-        # --- THIS IS THE NEW, SMARTER REALLOCATION FLOW ---
-        
-        # Pull out all the data sent from the app
+        # Reallocation Flow
         current_plan = data["current_plan"]
         locked_category = data["locked_category"]
         new_value = data["new_value"]
-        total_budget = data["total_budget"]
-        transactions = data.get("transactions", []) # Pass transactions for context
-
-        # Build a transaction history string for the AI
-        history = "\n".join(f"- {tx['name']}: ${tx['amount']:.2f}" for tx in transactions)
-
-        # Engineer the new, more powerful prompt for reallocation
-        prompt = f"""
-        You are a helpful budgeting assistant.
-        A user has an existing weekly budget plan that totals ${total_budget}. Here is their current plan:
-        {json.dumps(current_plan, indent=2)}
-
-        The user now wants to make a specific change. They have decided to **lock the "{locked_category}" category to exactly ${new_value}**.
-
-        Based on their transaction history provided below, your task is to intelligently reallocate the remaining budget across all OTHER categories.
-        ---
-        Transaction History:
-        {history}
-        ---
-        RULES:
-        1. The "{locked_category}" category MUST be ${new_value} in your response.
-        2. Intelligently adjust the other categories. Be realistic: essential categories like "Debt Payments" and "Transportation" are less flexible and should be reduced less than discretionary categories like "Shopping" or "Entertainment".
-        3. The sum of all "amount" values in your final JSON must exactly equal the total budget of ${total_budget}.
-        4. Return ONLY the raw JSON object for the complete new plan. The format must be identical to the input plan. Do not add any explanatory text or markdown.
-        """.strip()
-
-        # Create a unique cache key for this specific reallocation request
-        cache_key = f"reallocate:{json.dumps(current_plan, sort_keys=True)}:lock:{locked_category}:{new_value}"
+        
+        reallocation_rules = f"""
+        The user has an existing plan and wants to make a specific change.
+        Their current plan is: {json.dumps(current_plan, indent=2)}
+        They have decided to **lock the "{locked_category}" category to exactly ${new_value}**.
+        Your task is to intelligently reallocate the remaining budget across all OTHER categories.
+        - The "{locked_category}" category MUST have an "amount" of ${new_value}.
+        - Be realistic: essential categories like "Debt Payments" are less flexible than discretionary categories like "Shopping".
+        """
+        prompt = base_prompt + reallocation_rules
+        # Add reallocation details to the cache key for uniqueness
+        cache_key_parts.extend(["reallocate", locked_category, str(new_value)])
 
     else:
-        # --- THIS IS THE ORIGINAL FLOW FOR INITIAL BUDGET GENERATION ---
-        # (This logic remains the same as before)
-        
-        transactions = data.get("transactions", [])
-        if not transactions:
-            sample_path = os.path.join(current_app.root_path, "data", "sample_transactions.json")
-            with open(sample_path, "r") as f:
-                transactions = json.load(f)
+        # Initial Generation Flow
+        prompt = base_prompt
+        # Add generation details to the cache key
+        cache_key_parts.append("initial")
 
-        budget  = data.get("weekly_budget", 100)
-        user_id = data.get("user_id", "anonymous")
-        history = "\n".join(f"- {tx['name']}: ${tx['amount']:.2f}" for tx in transactions)
+    formatting_rules = f"""
+    RULES FOR RESPONSE FORMAT:
+    1. Your response MUST be ONLY a raw JSON object.
+    2. The JSON object must have top-level keys representing spending categories (e.g., "Food", "Transportation").
+    3. The value for EACH key must be another JSON object with three specific fields: "amount", "percent", and "subtitle".
+       - "amount": An integer for the suggested budget.
+       - "percent": An integer representing the percentage of the total budget. You MUST calculate this for every category.
+       - "subtitle": A short, helpful string (max 5 words) listing 1-3 example merchants. If no relevant merchants exist, create a sensible default (e.g., "General savings").
+    4. The sum of all "amount" values in your final JSON must exactly equal the total budget of ${total_budget}.
+    
+    Example of the required output format:
+    {{
+      "Food": {{ "amount": 75, "percent": 38, "subtitle": "McDonald's, KFC" }}
+    }}
+    Do not include markdown fences (```json) or any other text outside of the main JSON object.
+    """
+    prompt += formatting_rules
 
-        # Your original, detailed prompt for initial generation
-        prompt = f"""
-        Given the following transaction history:
-        ---
-        {history}
-        ---
-        And a total weekly budget of ${budget}, create a suggested spending plan.
-        Your response must be ONLY a raw JSON object. The JSON object should have top-level keys representing spending categories (e.g., "Food", "Transportation"). The value for each key must be another JSON object with three specific fields: "amount", "percent", and "subtitle".
-        - "amount": An integer representing the suggested budget for that category.
-        - "percent": An integer representing what percentage of the total weekly budget this amount is. You must calculate this.
-        - "subtitle": A short, helpful string (max 5 words) listing 1-3 example merchants from the transaction history that fit this category.
-        The sum of all "amount" values must equal the total weekly budget of ${budget}.
-        Example of the required output format:
-        {{
-          "Food": {{ "amount": 75, "percent": 38, "subtitle": "McDonald's, KFC" }}
-        }}
-        Do not include markdown fences (```json) or any other text outside of the main JSON object.
-        """.strip()
-        cache_key = f"{user_id}:{budget}"
-
-    # --- THE REST OF THE FUNCTION (CACHE, GEMINI CALL, RETURN) REMAINS IDENTICAL ---
+    # Join the parts to create the final, unique cache key
+    cache_key = ":".join(cache_key_parts)
+    print(f"Generated Cache Key: {cache_key}")
     
     # 3) Return from cache if available
     cached = get_cached_summary(cache_key)

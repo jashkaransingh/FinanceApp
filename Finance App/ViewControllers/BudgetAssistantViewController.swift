@@ -10,16 +10,14 @@ import UIKit
 class BudgetAssistantViewController: UIViewController {
     
     // MARK: - Properties
-    
-    var accessToken: String? // To be passed from the previous screen
     private var currentPlanTotalBudget: Int = 0
     private var originalTransactions: [Transaction] = []
     private var debounceTimer: Timer?
     
     // UI Elements
+    private let activityIndicator = UIActivityIndicatorView(style: .large)
     private let scrollView = UIScrollView()
     private let contentStack = UIStackView()
-    
     
     // back button + title
     private lazy var backButton: UIButton = {
@@ -29,7 +27,6 @@ class BudgetAssistantViewController: UIViewController {
         btn.addTarget(self, action: #selector(didTapBack), for: .touchUpInside)
         return btn
     }()
-    
     // big target icon
     private let headerIconContainer: UIView = {
         let v = UIView()
@@ -44,7 +41,6 @@ class BudgetAssistantViewController: UIViewController {
         iv.translatesAutoresizingMaskIntoConstraints = false
         return iv
     }()
-    
     // title + subtitle
     private let titleLabel: UILabel = {
         let l = UILabel()
@@ -62,7 +58,6 @@ class BudgetAssistantViewController: UIViewController {
         l.textAlignment = .center
         return l
     }()
-    
     // pill-shaped budget input
     private let budgetPill: UIView = {
         let v = UIView()
@@ -85,7 +80,6 @@ class BudgetAssistantViewController: UIViewController {
         l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }()
-    
     // full-width slider + min/max labels
     private let budgetSlider: UISlider = {
         let s = UISlider()
@@ -112,7 +106,6 @@ class BudgetAssistantViewController: UIViewController {
         l.textColor = .secondaryLabel
         return l
     }()
-    
     // generate Budget Button
     private lazy var generateButton: UIButton = {
         let btn = UIButton(type: .system)
@@ -125,7 +118,6 @@ class BudgetAssistantViewController: UIViewController {
         btn.addTarget(self, action: #selector(didTapGenerate), for: .touchUpInside)
         return btn
     }()
-    
     // “Your Spending Plan” header
     private lazy var suggestionsHeader: UIStackView = {
         let icon = UIImageView(image: UIImage(systemName: "checkmark.circle.fill"))
@@ -143,7 +135,6 @@ class BudgetAssistantViewController: UIViewController {
         stack.alignment = .center
         return stack
     }()
-    
     // vertical list of cards
     private let suggestionsStack: UIStackView = {
         let s = UIStackView()
@@ -155,15 +146,22 @@ class BudgetAssistantViewController: UIViewController {
     // MARK: – Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
-        setupNavBar()
-        setupLayout()
-        suggestionsHeader.isHidden = true
-        suggestionsStack.isHidden = true
-        budgetSlider.addTarget(self, action: #selector(sliderChanged), for: .valueChanged)
+        setupView()
+        loadSavedPlan()
     }
     
     // MARK: - UI Setup
+    private func setupView() {
+        view.backgroundColor = .systemBackground
+        setupNavBar()
+        setupLayout()
+        budgetSlider.addTarget(self, action: #selector(sliderDidChange), for: .valueChanged)
+        
+        // Start in the loading state by default
+        contentStack.isHidden = true
+        activityIndicator.startAnimating()
+    }
+    
     private func setupNavBar() {
         title = "Budget Assistant"
         navigationItem.leftBarButtonItem = UIBarButtonItem(customView: backButton)
@@ -208,22 +206,25 @@ class BudgetAssistantViewController: UIViewController {
         budgetPill.addSubview(currencyIcon)
         budgetPill.addSubview(budgetValueLabel)
         
+        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(activityIndicator)
+        
+        
         // constraints
         NSLayoutConstraint.activate([
-            // scrollView edges
+            // --- SCROLLER FIX: Pinning to correct guides ---
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             
-            // stack inside scroll
-            contentStack.topAnchor.constraint(equalTo: scrollView.topAnchor, constant: 24),
-            contentStack.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor, constant: 16),
-            contentStack.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor, constant: -16),
-            contentStack.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            contentStack.widthAnchor.constraint(equalTo: scrollView.widthAnchor, constant: -32),
+            contentStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 24),
+            contentStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -24),
+            contentStack.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor, constant: 16),
+            contentStack.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor, constant: -16),
+            contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -32),
             
-            // header icon container
+            // The rest of your constraints for the UI elements are correct
             headerIconContainer.widthAnchor.constraint(equalToConstant: 64),
             headerIconContainer.heightAnchor.constraint(equalToConstant: 64),
             headerIcon.centerXAnchor.constraint(equalTo: headerIconContainer.centerXAnchor),
@@ -231,12 +232,10 @@ class BudgetAssistantViewController: UIViewController {
             headerIcon.widthAnchor.constraint(equalToConstant: 32),
             headerIcon.heightAnchor.constraint(equalToConstant: 32),
             
-            // pill size
             budgetPill.heightAnchor.constraint(equalToConstant: 40),
             budgetPill.leadingAnchor.constraint(equalTo: contentStack.leadingAnchor),
             budgetPill.trailingAnchor.constraint(equalTo: contentStack.trailingAnchor),
             
-            // pill subviews
             currencyIcon.leadingAnchor.constraint(equalTo: budgetPill.leadingAnchor, constant: 12),
             currencyIcon.centerYAnchor.constraint(equalTo: budgetPill.centerYAnchor),
             currencyIcon.widthAnchor.constraint(equalToConstant: 20),
@@ -245,18 +244,19 @@ class BudgetAssistantViewController: UIViewController {
             budgetValueLabel.centerXAnchor.constraint(equalTo: budgetPill.centerXAnchor),
             budgetValueLabel.centerYAnchor.constraint(equalTo: budgetPill.centerYAnchor),
             
-            // slider full width
             budgetSlider.leadingAnchor.constraint(equalTo: contentStack.leadingAnchor),
             budgetSlider.trailingAnchor.constraint(equalTo: contentStack.trailingAnchor),
             
-            // suggestionsStack width
             suggestionsStack.leadingAnchor.constraint(equalTo: contentStack.leadingAnchor),
             suggestionsStack.trailingAnchor.constraint(equalTo: contentStack.trailingAnchor),
             
-            // Add constraints for generate budget button
             generateButton.leadingAnchor.constraint(equalTo: contentStack.leadingAnchor),
             generateButton.trailingAnchor.constraint(equalTo: contentStack.trailingAnchor),
-            generateButton.heightAnchor.constraint(equalToConstant: 50)
+            generateButton.heightAnchor.constraint(equalToConstant: 50),
+            
+            // Constraints for the central activity indicator
+            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
     
@@ -268,44 +268,101 @@ class BudgetAssistantViewController: UIViewController {
         h.translatesAutoresizingMaskIntoConstraints = false
         return h
     }
+    /// Transitions the UI to the initial "Generate Plan" state.
+    private func transitionToInitialState() {
+        // Ensure suggestion views are hidden and cleared
+        self.suggestionsHeader.isHidden = true
+        self.suggestionsStack.isHidden = true
+        self.suggestionsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        
+        headerIconContainer.alpha = 1
+        headerIconContainer.isHidden = false
+        titleLabel.alpha = 1
+        titleLabel.isHidden = false
+        subtitleLabel.alpha = 1
+        subtitleLabel.isHidden = false
+        budgetPill.alpha = 1
+        budgetPill.isHidden = false
+        budgetSlider.alpha = 1
+        budgetSlider.isHidden = false
+        generateButton.alpha = 1
+        generateButton.isHidden = false
+        
+        contentStack.alpha = 0
+        contentStack.isHidden = false
+        
+        UIView.animate(withDuration: 0.3) {
+            self.contentStack.alpha = 1
+        }
+    }
+    /// Transitions the UI to show the budget plan cards.
+    private func transitionToPlanState(plan: [String: CategoryBudget], totalBudget: Int) {
+        // Ensure initial views are hidden
+        self.headerIconContainer.isHidden = true
+        self.titleLabel.isHidden = true
+        self.subtitleLabel.isHidden = true
+        self.budgetPill.isHidden = true
+        self.budgetSlider.isHidden = true
+        self.generateButton.isHidden = true
+        
+        // Update data
+        self.currentPlanTotalBudget = totalBudget
+        
+        // CRITICAL: Add all cards to the stack *before* the animation block.
+        // This allows the layout engine to calculate the final height of the content.
+        let sortedCategories = plan.filter { $0.value.amount > 0 }.sorted { $0.key < $1.key }
+        for (categoryName, budgetDetails) in sortedCategories {
+            let card = SuggestionCardView()
+            
+            card.budgetSlider.maximumValue = Float(totalBudget)
+            card.configure(
+                title: categoryName.capitalized,
+                subtitle: budgetDetails.subtitle,
+                amount: budgetDetails.amount,
+                percent: budgetDetails.percent
+            )
+            card.onSliderChanged = { [weak self] newValue in
+                guard let self = self else { return }
+                self.debounceTimer?.invalidate()
+                self.debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { _ in
+                    self.reallocateBudgets(from: card, newValue: newValue)
+                }
+            }
+            suggestionsStack.addArrangedSubview(card)
+        }
+        
+        // Make the suggestion views visible
+        self.suggestionsHeader.isHidden = false
+        self.suggestionsStack.isHidden = false
+        
+        // Animate the entire content stack in smoothly.
+        self.contentStack.alpha = 0
+        self.contentStack.isHidden = false
+        UIView.animate(withDuration: 0.4) {
+            self.contentStack.alpha = 1
+        }
+    }
     
     // MARK: – Actions
+    @objc private func didTapBack() {
+        navigationController?.popViewController(animated: true)
+    }
     
     // Called when the user drags the main budget slider.
-    @objc private func sliderChanged() {
-        // Update the budget label
+    @objc private func sliderDidChange() {
         let v = Int(round(budgetSlider.value / 10) * 10)
         budgetSlider.value = Float(v)
         budgetValueLabel.text = "\(v)"
         
-        // If results are currently showing, hide them and bring back the Generate button.
         if suggestionsHeader.isHidden == false {
-            // In sliderChanged, inside the existing animation block
-            UIView.animate(withDuration: 0.3) {
-                self.suggestionsHeader.isHidden = true
-                self.suggestionsStack.isHidden = true
-                self.generateButton.isHidden = false
-                
-                // Animate the top controls back into view
-                self.titleLabel.isHidden = false
-                self.subtitleLabel.isHidden = false
-                self.headerIconContainer.isHidden = false
-                self.budgetPill.isHidden = false
-                
-                self.suggestionsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-            }
+            transitionToInitialState()
         }
-    }
-    
-    @objc private func didTapBack() {
-        navigationController?.popViewController(animated: true)
     }
     
     /// Called when the user taps the "Generate My Plan" button. This is the main action trigger.
     @objc private func didTapGenerate() {
         // 1. Get the current budget value from the slider.
         let budget = Int(budgetSlider.value)
-        print("Generate button tapped with budget: \(budget)")
         
         // 2. Show a loading indicator on the button and disable it to prevent multiple taps.
         var config = generateButton.configuration ?? .plain()
@@ -313,199 +370,103 @@ class BudgetAssistantViewController: UIViewController {
         generateButton.configuration = config
         generateButton.isEnabled = false
         
-        // 3. Kick off the data fetching process.
         loadSuggestions(for: budget)
     }
     
+    
     // MARK: – Data Logic
+    private func loadSavedPlan() {
+        // The setInitialLoadingState() in viewDidLoad has already hidden all content
+        // and started the main activityIndicator. We don't need to do anything else here.
+        
+        DataService.loadBudgetPlan { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                
+                // 1. Stop the main loading spinner.
+                self.activityIndicator.stopAnimating()
+                
+                // 2. Based on the result, transition to the correct final UI state.
+                switch result {
+                case .success(let response):
+                    // A plan was found. Transition to the plan view.
+                    self.transitionToPlanState(plan: response.budgetPlan, totalBudget: response.totalBudget)
+                    self.loadTransactionsInBackground()
+                    
+                case .failure:
+                    // No plan found. Transition to the initial "Generate" view.
+                    self.transitionToInitialState()
+                }
+            }
+        }
+    }
     /// This function starts the chain of network requests.
     private func loadSuggestions(for budget: Int) {
-        // 1. Check for the Plaid access token. We can't do anything without it.
-        guard let token = accessToken else {
-            print("Error: Access token is missing.")
-            // Re-enable the button if we can't proceed.
-            var config = self.generateButton.configuration ?? .plain()
-            config.showsActivityIndicator = false
-            self.generateButton.configuration = config
-            self.generateButton.isEnabled = true
-            return
-        }
-        
-        // 2. Define the date range for fetching historical transactions (last 42 days).
+        // We no longer check for a token. We just fetch transactions.
         let endDate = Date()
         guard let startDate = Calendar.current.date(byAdding: .day, value: -42, to: endDate) else { return }
         
-        // 3. Call the DataService to fetch transactions from our backend.
-        DataService.loadTransactions(
-            accessToken: token,
-            startDate: iso8601(startDate),
-            endDate: iso8601(endDate)
-        ) { [weak self] transactions in
-            // Once transactions are fetched, this completion block is called.
+        let startDateString = iso8601(startDate)
+        let endDateString = iso8601(endDate)
+        
+        DataService.loadTransactions(startDate: startDateString, endDate: endDateString) { [weak self] result in
             guard let self = self else { return }
-            print("✅ Loaded \(transactions.count) transactions.")
             
-            // 4. With the transactions loaded, now we call the AI.
-            self.fetchAISuggestions(using: transactions, for: budget)
+            switch result {
+            case .success(let transactions):
+                self.fetchAISuggestions(using: transactions, for: budget)
+                
+            case .failure(let error):
+                print("❌ Failed to load transactions for AI: \(error)")
+                DispatchQueue.main.async {
+                    var config = self.generateButton.configuration ?? .plain()
+                    config.showsActivityIndicator = false
+                    self.generateButton.configuration = config
+                    self.generateButton.isEnabled = true
+                }
+            }
         }
     }
     
     /// This function prepares the data and calls the AI endpoint via the DataService.
     private func fetchAISuggestions(using transactions: [Transaction], for budget: Int) {
-        // 1. Create the JSON payload to send to our backend.
-        let payload: [String: Any] = [
-            "weekly_budget": budget,
-            "transactions": transactions.map { ["name": $0.name, "amount": $0.amount] }
-        ]
-        
-        // 2. Call the AI summary endpoint in our DataService.
-        DataService.fetchAISummary(payload: payload) { [weak self] result in
-            // This completion block is called when the AI responds.
-            // We must switch to the main thread to update the UI.
+        DataService.fetchAISuggestion(transactions: transactions, budget: budget) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 
-                // 3. Stop the loading animation on the button.
                 var config = self.generateButton.configuration ?? .plain()
                 config.showsActivityIndicator = false
                 self.generateButton.configuration = config
                 self.generateButton.isEnabled = true
                 
-                // 4. Handle the result from the AI.
                 switch result {
-                case .success(let data):
-                    // If successful, render the suggestion cards on the screen.
-                    print("✅ AI suggestions received: \(data)")
+                case .success(let suggestionData):
                     self.originalTransactions = transactions
-                    self.renderSuggestionCards(from: data, totalBudget: budget)
+                    // Instead of calling render... directly, call the transition function
+                    self.transitionToPlanState(plan: suggestionData, totalBudget: budget)
+                    self.saveCurrentPlan(plan: suggestionData, totalBudget: budget)
                     
                 case .failure(let error):
-                    // If it fails, print an error and ensure the suggestions area is hidden.
                     print("❌ AI fetching failed: \(error.localizedDescription)")
-                    self.suggestionsHeader.isHidden = true
-                    self.suggestionsStack.isHidden = true
+                    self.transitionToInitialState()
                 }
             }
-        }
-    }
-    
-    /// Takes a new budget plan from the AI and updates all the visible cards to match.
-    private func updateCards(with newPlan: [String: Any]) {
-        // 1. Get a reference to all the SuggestionCardView instances currently on screen.
-        let allCards = suggestionsStack.arrangedSubviews.compactMap { $0 as? SuggestionCardView }
-        
-        // 2. Loop through each card that is currently visible.
-        for card in allCards {
-            // 3. Find the new data for this specific card using its title as a key.
-            guard let title = card.titleLabel.text,
-                  let details = newPlan[title] as? [String: Any],
-                  let newAmount = details["amount"] as? Int else {
-                // If the AI didn't return data for this card, just skip it.
-                continue
-            }
-            
-            // 4. Calculate the new percentage based on the new amount.
-            let newPercent = Int((Float(newAmount) / Float(self.currentPlanTotalBudget)) * 100)
-            
-            // 5. CRITICAL: To prevent an infinite loop, we temporarily remove the action
-            //    from the slider before programmatically changing its value.
-            card.budgetSlider.removeTarget(self, action: nil, for: .valueChanged)
-            
-            // 6. Update the card's UI with the new values from the AI.
-            //    We can animate this for a smooth visual effect.
-            UIView.animate(withDuration: 0.3) {
-                card.budgetSlider.setValue(Float(newAmount), animated: true)
-            }
-            card.amountLabel.text = "$\(newAmount)"
-            card.percentLabel.text = "\(newPercent)% of budget"
-            
-            // 7. CRITICAL: Re-attach the action to the slider so the user can move it again.
-            card.budgetSlider.addTarget(self, action: #selector(sliderDidMove), for: .valueChanged)
-        }
-    }
-    
-    private func renderSuggestionCards(from suggestions: [String: Any], totalBudget: Int) {
-        suggestionsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        
-        let filteredSuggestions = suggestions.filter {
-            guard let details = $0.value as? [String: Any], let amount = details["amount"] as? Int else { return false }
-            return amount > 0
-        }
-        
-        if filteredSuggestions.isEmpty {
-            suggestionsHeader.isHidden = true
-            suggestionsStack.isHidden = true
-            generateButton.isHidden = false // Show button again if no results
-            return
-        }
-        self.currentPlanTotalBudget = totalBudget
-        
-        suggestionsHeader.isHidden = false
-        suggestionsStack.isHidden = false
-        generateButton.isHidden = true
-        
-        UIView.animate(withDuration: 0.4) {
-            self.titleLabel.isHidden = true
-            self.subtitleLabel.isHidden = true
-            self.headerIconContainer.isHidden = true
-            self.budgetPill.isHidden = true
-        }
-        
-        // Create all cards first
-        let cards = filteredSuggestions.map { (key, value) -> SuggestionCardView in
-            let card = SuggestionCardView()
-            guard let details = value as? [String: Any],
-                  let amount = details["amount"] as? Int,
-                  let percent = details["percent"] as? Int,
-                  let subtitle = details["subtitle"] as? String else {
-                return card // Return an empty card if data is malformed
-            }
-            // 1. Set the max value FIRST.
-            card.budgetSlider.maximumValue = Float(totalBudget)
-            
-            // 2. Configure the card SECOND. This will now correctly set the initial value.
-            card.configure(title: key.capitalized, subtitle: subtitle, amount: amount, percent: percent)
-            return card
-        }
-        
-        // Now, configure the callback for each card
-        for card in cards {
-            card.onSliderChanged = { [weak self] newValue in
-                // When a slider moves...
-                guard let self = self else { return }
-                
-                // 1. Invalidate any previous timer. This cancels the old API request if the user keeps moving the slider.
-                self.debounceTimer?.invalidate()
-                
-                // 2. Start a new timer. The code inside will only run after 0.8 seconds of inactivity.
-                self.debounceTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { _ in
-                    // 3. Call our reallocation function, which triggers the smart AI.
-                    self.reallocateBudgets(from: card, newValue: newValue)
-                }
-            }
-            suggestionsStack.addArrangedSubview(card)
         }
     }
     
     // Delete the old reallocateBudgets function and replace it with this one.
     private func reallocateBudgets(from changedCard: SuggestionCardView, newValue: Float) {
-        // 1. Get the current state of the plan from all cards
-        var currentPlan: [String: [String: Any]] = [:]
+        // 1. Get the current state of the plan directly from the UI cards.
         let allCards = suggestionsStack.arrangedSubviews.compactMap { $0 as? SuggestionCardView }
-        for card in allCards {
-            if let title = card.titleLabel.text {
-                // We send the integer value of the slider, not a float
-                currentPlan[title] = ["amount": card.currentAmount]
-            }
-        }
+        let currentPlan = Dictionary(uniqueKeysWithValues: allCards.map {
+            ($0.titleLabel.text ?? "", ["amount": $0.currentAmount])
+        })
         
-        // 2. Identify the category the user locked
         guard let lockedCategory = changedCard.titleLabel.text else { return }
         
-        // 3. Show a loading indicator (optional but good UX)
-        // You could add a spinner to the view here.
+        // Optional: You could show a loading overlay here for better UX
         
-        // 4. Call the new DataService function
+        // 2. Call the DataService with the necessary info.
         DataService.fetchAIReallocation(
             transactions: self.originalTransactions,
             currentPlan: currentPlan,
@@ -514,22 +475,43 @@ class BudgetAssistantViewController: UIViewController {
             totalBudget: self.currentPlanTotalBudget
         ) { [weak self] result in
             DispatchQueue.main.async {
-                // Hide loading indicator...
                 switch result {
                 case .success(let newPlan):
-                    // When we get the new smart plan, update all cards.
                     self?.updateCards(with: newPlan)
+                    self?.saveCurrentPlan(plan: newPlan, totalBudget: self?.currentPlanTotalBudget ?? 0)
                 case .failure(let error):
                     print("❌ AI reallocation failed: \(error)")
                 }
             }
         }
     }
-    // In the Actions section...
-    @objc private func sliderDidMove(_ sender: UISlider) {
-        // This function is just a target for the re-attached slider action.
-        // The actual logic is handled by the `onSliderChanged` closure.
+    
+    /// A small helper to save the current plan to the backend.
+    private func saveCurrentPlan(plan: [String: CategoryBudget], totalBudget: Int) {
+        DataService.saveBudgetPlan(plan: plan, totalBudget: totalBudget) { success in
+            if success {
+                print("✅ Budget plan saved successfully.")
+            } else {
+                print("❌ Failed to save budget plan.")
+            }
+        }
     }
+    
+    /// Fetches transactions quietly in the background so they are ready for reallocation.
+    private func loadTransactionsInBackground() {
+        let endDate = Date()
+        guard let startDate = Calendar.current.date(byAdding: .day, value: -42, to: endDate) else { return }
+        let startDateString = iso8601(startDate)
+        let endDateString = iso8601(endDate)
+        
+        DataService.loadTransactions(startDate: startDateString, endDate: endDateString) { [weak self] result in
+            if case .success(let transactions) = result {
+                self?.originalTransactions = transactions
+                print("✅ Background transactions loaded for reallocation.")
+            }
+        }
+    }
+    
     // MARK: – Helpers
     
     /// Converts a Swift `Date` object into a "yyyy-MM-dd" string for API requests.
@@ -537,6 +519,31 @@ class BudgetAssistantViewController: UIViewController {
         let fmt = ISO8601DateFormatter()
         fmt.formatOptions = [.withFullDate]
         return fmt.string(from: date)
+    }
+    /// Updates the card UIs after an AI reallocation.
+    private func updateCards(with newPlan: [String: CategoryBudget]) {
+        let allCards = suggestionsStack.arrangedSubviews.compactMap { $0 as? SuggestionCardView }
+        
+        for card in allCards {
+            guard let title = card.titleLabel.text,
+                  let details = newPlan[title] else { // Matching by capitalized title
+                continue
+            }
+            
+            let newAmount = details.amount
+            let newPercent = currentPlanTotalBudget > 0 ? Int((Float(newAmount) / Float(currentPlanTotalBudget)) * 100) : 0
+            
+            let originalCallback = card.onSliderChanged
+            card.onSliderChanged = nil
+            
+            UIView.animate(withDuration: 0.3) {
+                card.budgetSlider.setValue(Float(newAmount), animated: true)
+            }
+            card.amountLabel.text = "$\(newAmount)"
+            card.percentLabel.text = "\(newPercent)% of budget"
+            
+            card.onSliderChanged = originalCallback
+        }
     }
 }
 

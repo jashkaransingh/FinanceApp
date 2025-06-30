@@ -9,7 +9,6 @@ import UIKit
 
 class AccountDetailViewController: UIViewController {
     // MARK: – Public API
-    var accessToken: String?
     var period: String?        // “today” / “week” / “month”
     
     // MARK: – Private Properties
@@ -41,13 +40,7 @@ class AccountDetailViewController: UIViewController {
             .font: UIFont.systemFont(ofSize: 34, weight: .bold)
         ]
         
-        guard
-            let token = accessToken,
-            let per   = period
-        else {
-            fatalError("AccountDetailViewController: missing accessToken or period")
-        }
-        title = "\(per.capitalized)’s Spending"
+        title = "\((period ?? "This").capitalized)'s Spending"
     }
     private func configureTableView() {
         tableView.translatesAutoresizingMaskIntoConstraints = false
@@ -80,10 +73,13 @@ class AccountDetailViewController: UIViewController {
     
     /// Computes date range, fetches transactions, and reloads the table.
     private func loadTransactions() {
-        guard
-            let token = accessToken,
-            let per   = period
-        else { return }
+        guard let per = period else {
+                    // Handle case where period is not set, maybe show an error
+                    print("Error: AccountDetailViewController requires a period to be set.")
+                    self.isLoading = false
+                    self.tableView.reloadData()
+                    return
+                }
         
         isLoading = true
         tableView.reloadData()
@@ -92,20 +88,24 @@ class AccountDetailViewController: UIViewController {
         let startStr = isoDateFormatter.string(from: start)
         let endStr   = isoDateFormatter.string(from: end)
         
-        DataService.loadTransactions(
-            accessToken: token,
-            startDate:   startStr,
-            endDate:     endStr
-        ) { [weak self] txs in
-            guard let self = self else { return }
-            // Brief delay to make shimmer visible
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                self.transactions = txs
-                self.isLoading = false
-                self.tableView.reloadData()
+        // Call the new, secure DataService function. No access token needed.
+                DataService.loadTransactions(startDate: startStr, endDate: endStr) { [weak self] result in
+                    guard let self = self else { return }
+                    
+                    // Give a little delay for a smoother UI feel with the shimmer.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        self.isLoading = false
+                        switch result {
+                        case .success(let transactions):
+                            self.transactions = transactions
+                        case .failure(let error):
+                            print("❌ Failed to load detail transactions:", error)
+                            self.transactions = [] // Clear data on failure
+                        }
+                        self.tableView.reloadData()
+                    }
+                }
             }
-        }
-    }
     
     /// Returns start and end `Date` for the given period.
     private func dateRange(for period: String) -> (Date, Date) {

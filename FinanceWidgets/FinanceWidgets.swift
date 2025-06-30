@@ -215,74 +215,125 @@ struct LockScreenCircularView: View {
 // MARK: – WIDGET‐2: The New Gauge Widget
 
 struct GaugeWidgetEntryView: View {
+//    let entry: FinanceEntry
+//
+//    // Extract “today’s” amount from the first summary if it exists, else zero:
+//    var todayAmount: Double {
+//        entry.summaries.first?.amount ?? 0
+//    }
+//
+//    // Determine ring color based on thresholds:
+//    private var ringColor: Color {
+//        switch todayAmount {
+//        case _ where todayAmount > 100:
+//            return .red
+//        case 25...100:
+//            return .yellow
+//        default:
+//            return .green
+//        }
+//    }
+//
+//    // Map the numeric value into a 0…1 “progress” (cap at 200):
+//    private var progress: Double {
+//        min(todayAmount / 200.0, 1.0)
+//    }
+//
+//    var body: some View {
+//        ZStack {
+//            // 1) Gray “track” circle behind
+//            Circle()
+//                .stroke(
+//                    AngularGradient(
+//                        gradient: Gradient(colors: [ringColor, ringColor.opacity(0.6)]),
+//                        center: .center
+//                    ),
+//                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+//                )
+//
+//
+//            // 2) Colored ring “progress”
+//            Circle()
+//                .trim(from: 0, to: progress)
+//                .stroke(
+//                    ringColor.gradient, // Use gradient for vibrance
+//                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+//                )
+//                .rotationEffect(.degrees(-90)) // Start from top
+//
+//            // 3) Numeric label in center
+//            if todayAmount > 0 {
+//                Text("\(Int(todayAmount))")
+//                    .font(.system(size: 14, weight: .bold))
+//                    .foregroundColor(.white)
+//                    .shadow(color: Color.black.opacity(0.3), radius: 1, x: 0, y: 1)
+//            } else {
+//                Text("–")
+//                    .font(.system(size: 14, weight: .bold))
+//                    .foregroundColor(.white.opacity(0.7))
+//                    .shadow(color: Color.black.opacity(0.3), radius: 1, x: 0, y: 1)
+//            }
+//        }
+//        .padding(8) // so that the ring is not clipped at the edges
+//        .background(
+//            // dark background so white text/ring pops:
+//            Circle().fill(Color(UIColor.systemGray6))
+//        )
+//        .frame(width: 60, height: 60) // EXACTLYLock Screen circular size
+//        .containerBackground(.clear, for: .widget)
+//
+//    }
     let entry: FinanceEntry
 
-    // Extract “today’s” amount from the first summary if it exists, else zero:
-    var todayAmount: Double {
-        entry.summaries.first?.amount ?? 0
-    }
-
-    // Determine ring color based on thresholds:
-    private var ringColor: Color {
-        switch todayAmount {
-        case _ where todayAmount > 100:
-            return .red
-        case 25...100:
-            return .yellow
-        default:
-            return .green
+        var todayAmount: Double {
+            entry.summaries.first?.amount ?? 0
         }
-    }
 
-    // Map the numeric value into a 0…1 “progress” (cap at 200):
-    private var progress: Double {
-        min(todayAmount / 200.0, 1.0)
-    }
+        /// This is the main view property. It uses a ViewBuilder to return
+        /// a different style of Gauge depending on the user's spending.
+        @ViewBuilder
+        private var styledGauge: some View {
+            switch todayAmount {
+            case _ where todayAmount > 100:
+                // "Danger" state: A speedometer dial with an explicit warning icon.
+                Gauge(value: todayAmount, in: 0...200) {
+                    // **THE FIX:** Use an empty Text view for the primary label to prevent overflow.
+                    Text("")
+                } currentValueLabel: {
+                    // Combine an icon and text for a clear danger signal.
+                    HStack(spacing: 2) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                        Text("$\(Int(todayAmount))")
+                    }
+                }
+                .gaugeStyle(.accessoryCircular) // The dial style.
 
-    var body: some View {
-        ZStack {
-            // 1) Gray “track” circle behind
-            Circle()
-                .stroke(
-                    AngularGradient(
-                        gradient: Gradient(colors: [ringColor, ringColor.opacity(0.6)]),
-                        center: .center
-                    ),
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
+            case 25...100:
+                // "Warning" state: A solid filled circle. This is visually very distinct.
+                // The system will render the white circle correctly on the Lock Screen.
+                ZStack {
+                    Circle().fill(Color.white)
+                    Text("$\(Int(todayAmount))")
+                        .font(.title3.bold())
+                        .foregroundColor(.black) // Text must be black to be visible on the white circle.
+                }
 
-
-            // 2) Colored ring “progress”
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(
-                    ringColor.gradient, // Use gradient for vibrance
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90)) // Start from top
-
-            // 3) Numeric label in center
-            if todayAmount > 0 {
-                Text("\(Int(todayAmount))")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-                    .shadow(color: Color.black.opacity(0.3), radius: 1, x: 0, y: 1)
-            } else {
-                Text("–")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white.opacity(0.7))
-                    .shadow(color: Color.black.opacity(0.3), radius: 1, x: 0, y: 1)
+            default:
+                // "Good" state: The most minimal style, a simple dial with just a needle.
+                Gauge(value: todayAmount, in: 0...200) {
+                    // **THE FIX:** Use an empty Text view for the primary label to prevent overflow.
+                    Text("")
+                } currentValueLabel: {
+                    Text("$\(Int(todayAmount))")
+                }
+                .gaugeStyle(.accessoryCircular) // The dial style.
             }
         }
-        .padding(8) // so that the ring is not clipped at the edges
-        .background(
-            // dark background so white text/ring pops:
-            Circle().fill(Color(UIColor.systemGray6))
-        )
-        .frame(width: 60, height: 60) // EXACTLYLock Screen circular size
-        .containerBackground(.clear, for: .widget)
 
-    }
+        var body: some View {
+            styledGauge
+                .containerBackground(.clear, for: .widget)
+        }
 }
 
 struct GaugeWidget: Widget {

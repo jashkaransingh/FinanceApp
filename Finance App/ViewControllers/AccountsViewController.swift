@@ -22,12 +22,7 @@ class AccountsViewController: UIViewController {
     private var summaries: [AccountSummary] = []//list of account summaries (fetched from backend)
     var needsRefresh = true// Tracks whether we need to re‐fetch the cards
     private var placeholderButton: UIButton?// If no accounts exist yet, we show a placeholder “Connect Bank” button
-    private var isLoadingSummaries = false
-    private var accessToken: String? {//store accessToken to access throught the app
-        get { UserDefaults.standard.string(forKey: "plaidAccessToken") }
-        set { UserDefaults.standard.set(newValue, forKey: "plaidAccessToken") }
-    }
-    private var plaidLinkHandler: Handler?//retains the plaid handler after the launch
+    private var isLoading = false
     
     // MARK: – Lifecycle
     override func viewDidLoad() {
@@ -47,12 +42,9 @@ class AccountsViewController: UIViewController {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: animated)
         
-        guard needsRefresh else { return }
-        //show skeleton cards
-        isLoadingSummaries = true
-        showSkeletonCards()
-        //then fetch
-        fetchBankStatusFromFirestore()
+        if needsRefresh {
+            fetchData()
+        }
     }
     
     override func viewWillDisappear(_ animated: Bool) {
@@ -126,7 +118,7 @@ class AccountsViewController: UIViewController {
             fab.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
             fab.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24)
         ])
-        fab.addTarget(self, action: #selector(fabTapped), for: .touchUpInside)
+        fab.addTarget(self, action: #selector(didTapBudgetAssistant), for: .touchUpInside)
     }
     
     // MARK: – Skeleton & Placeholder
@@ -140,22 +132,6 @@ class AccountsViewController: UIViewController {
         }
     }
     
-    /// Show “Connect Your Bank” button in place of the cards when we don’t have a bank token yet
-    private func showConnectBankPlaceholder() {
-        
-        stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }// Remove any previous arranged subviews from stack
-        placeholderButton?.removeFromSuperview()// If there’s already a placeholder sitting in `view`, remove it first
-        
-        let button = makeConnectButton()// Build a new placeholder
-        button.addTarget(self, action: #selector(fabTapped), for: .touchUpInside)
-        placeholderButton = button
-        
-        view.addSubview(button)// Add it to `view`
-        NSLayoutConstraint.activate([// and center it
-            button.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
-            button.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
-                                    ])
-    }
     
     private func makeConnectButton() -> UIButton {// Builds “Connect Your Bank” button
         let btn = UIButton(type: .system)
@@ -180,48 +156,74 @@ class AccountsViewController: UIViewController {
     /// Check Firestore for saved access token
     /// If found, save locally and load summaries
     /// Otherwise show a “Connect Bank” placeholder.
-    private func fetchBankStatusFromFirestore() {
+    private func fetchData() {
+        isLoading = true
+        showSkeletonCards()
+        
         guard let uid = Auth.auth().currentUser?.uid else {
-            showConnectBankPlaceholder()// If no logged-in user, default to showing “Connect Bank”
-            needsRefresh = false
+            showPlaceholder(message: "Please sign in.")
             return
         }
-        Firestore.firestore()
-            .collection("users")
-            .document(uid)
-            .getDocument { [weak self] snapshot, _ in
-                guard let self = self else { return }
-                if
-                    let data = snapshot?.data(),
-                    let token = data["bankAccessToken"] as? String
-                {
-                    self.accessToken = token// They’ve linked before: save locally & load the real cards
-                    self.loadSummariesAndShowCards()
-                } else {
-                    self.showConnectBankPlaceholder()
-                }
-                self.needsRefresh = false//Now that UI is drawn, mark needsRefresh = false
+        
+        let docRef = Firestore.firestore().collection("users").document(uid)
+        docRef.getDocument { [weak self] document, error in
+            guard let self = self, let document = document, document.exists else {
+                self?.showPlaceholder(message: "An error occurred.")
+                return
             }
+            
+            let isBankConnected = document.data()?["isBankConnected"] as? Bool ?? false
+            if isBankConnected {
+                self.loadSummaries()
+            } else {
+                self.showPlaceholder(message: "Connect your bank to get started.")
+            }
+        }
     }
     
     /// Remove “Connect Bank” button, fetch from backend, then render cards
-    private func loadSummariesAndShowCards() {
-        placeholderButton?.removeFromSuperview()// Before you draw cards, remove the placeholder from `view`
+    private func loadSummaries() {
+        placeholderButton?.removeFromSuperview()
         placeholderButton = nil
         stackView.alignment = .fill
-        guard let token = accessToken else { return }
         
-        // Leave animation showing here
-        DataService.loadSummariesFromBackend(accessToken: token) { fetched in
-            DispatchQueue.main.async {
-                self.stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }// NOW remove shimmer (animation)
-                self.isLoadingSummaries = false
-                self.summaries = fetched
+        // Call the new, simple, and secure DataService function.
+        DataService.loadSummaries { [weak self] result in
+            guard let self = self else { return }
+            
+            self.isLoading = false
+            self.needsRefresh = false
+            self.stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+            
+            switch result {
+            case .success(let summaries):
+                self.summaries = summaries
                 self.populateCards()
-                self.storeSummariesForWidget(fetched)
+                self.storeSummariesForWidget(summaries)
+                HapticsManager.trigger(.medium)
+            case .failure(let error):
+                print("❌ Failed to load summaries:", error)
+                // Optionally show an error message to the user
             }
-            HapticsManager.trigger(.medium)//Add haptics when the data is loaded
         }
+    }
+    
+    private func showPlaceholder(message: String) {
+        isLoading = false
+        needsRefresh = false
+        stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        placeholderButton?.removeFromSuperview()
+        
+        let button = makeConnectButton()
+        button.setTitle(message, for: .normal) // More flexible placeholder
+        button.addTarget(self, action: #selector(startPlaidLinkFlow), for: .touchUpInside)
+        placeholderButton = button
+        
+        view.addSubview(button)
+        NSLayoutConstraint.activate([
+            button.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
+            button.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
+        ])
     }
     
     // MARK: – UI Population
@@ -236,47 +238,55 @@ class AccountsViewController: UIViewController {
             
             stackView.addArrangedSubview(card)//add the card to the stackView
         }
-//        let card = WalletCardView()
-//        card.translatesAutoresizingMaskIntoConstraints = false
-//        card.configure(
-//          bankName:      "Bank of America",
-//          cardholder:    "Noor Singh",
-//          maskedNumber:  "•••• 1234",
-//          expiry:        "08/27",
-//          balance:       2_345.67,
-//          gradientColors:[
-//            UIColor(red: 0.05, green: 0.45, blue: 0.85, alpha: 1),
-//            UIColor(red: 0.15, green: 0.65, blue: 0.95, alpha: 1)
-//          ]
-//        )
-//        stackView.addArrangedSubview(card)
-//
-//        // if in a vertical UIStackView, constrain height:
-//        NSLayoutConstraint.activate([
-//          card.heightAnchor.constraint(equalToConstant: 200)
-//        ])
-
+        //        let card = WalletCardView()
+        //        card.translatesAutoresizingMaskIntoConstraints = false
+        //        card.configure(
+        //          bankName:      "Bank of America",
+        //          cardholder:    "Noor Singh",
+        //          maskedNumber:  "•••• 1234",
+        //          expiry:        "08/27",
+        //          balance:       2_345.67,
+        //          gradientColors:[
+        //            UIColor(red: 0.05, green: 0.45, blue: 0.85, alpha: 1),
+        //            UIColor(red: 0.15, green: 0.65, blue: 0.95, alpha: 1)
+        //          ]
+        //        )
+        //        stackView.addArrangedSubview(card)
+        //
+        //        // if in a vertical UIStackView, constrain height:
+        //        NSLayoutConstraint.activate([
+        //          card.heightAnchor.constraint(equalToConstant: 200)
+        //        ])
+        
     }
     
     // MARK: – Actions
-    @objc private func fabTapped() {
+    /// The action for the main floating button.
+    @objc private func didTapBudgetAssistant() {
         let vc = BudgetAssistantViewController()
-        vc.accessToken = accessToken
         navigationController?.pushViewController(vc, animated: true)
-
+    }
+    
+    /// The new, correct action for the "Connect Bank" placeholder button.
+    @objc private func startPlaidLinkFlow() {
+        PlaidService.shared.startPlaidLink(from: self) { [weak self] in
+            // On success, we just need to refresh the view.
+            self?.needsRefresh = true
+            self?.fetchData()
+        } onError: { error in
+            print("❌ Plaid Link flow failed: \(error)")
+            // Optionally show an alert to the user
+        }
     }
     
     @objc private func cardTapped(_ card: AccountCardView) {
         guard//unwrap these 3 items below
-            let model = card.model,
-            let token = accessToken
+            let model = card.model
         else { return }
         
         HapticsManager.trigger(.light)
         
-        let detailVC = AccountDetailViewController()//create the instance of accountViewcontroller to display
-        detailVC.accessToken = token//passes the stored accessToken to detailView to authorize fetch transaction request
-        // translate your model.periodTitle into the API’s “today”/“week”/“month”
+        let detailVC = AccountDetailViewController()
         detailVC.period = {
             if model.periodTitle.contains("Today")  { return "today" }
             if model.periodTitle.contains("Week")   { return "week"  }

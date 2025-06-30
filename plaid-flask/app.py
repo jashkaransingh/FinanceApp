@@ -1,14 +1,31 @@
 from flask import Flask, jsonify, send_file
 from flask_cors import CORS
 
+import firebase_admin
+from firebase_admin import credentials
+
 import config
 from routes.auth         import auth_bp
 from routes.transactions import tx_bp
 from routes.sandbox      import sb_bp
 import routes.ai as ai_module
+from routes.webhook import webhook_bp
 
 # MARK: – Application Setup
-
+# --- NEW: Initialize Firebase Admin SDK ---
+# This code must run once, before your app starts.
+# It uses your service account key file to securely connect to your Firebase project.
+# Make sure your "serviceAccountKey.json" file is in the root directory of your plaid-flask project.
+try:
+    cred = credentials.Certificate("serviceAccountKey.json")
+    firebase_admin.initialize_app(cred)
+    print("✅ Firebase Admin SDK initialized successfully.")
+except Exception as e:
+    print("🔥 Failed to initialize Firebase Admin SDK:", e)
+    # You might want to exit the app if Firebase can't initialize
+    # import sys
+    # sys.exit(1)
+    
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
@@ -26,6 +43,8 @@ app.register_blueprint(tx_bp)
 app.register_blueprint(sb_bp, url_prefix="/sandbox")
 
 app.register_blueprint(ai_module.ai_bp)
+
+app.register_blueprint(webhook_bp)
 
 
 # MARK: – Health Check & Miscellaneous Routes

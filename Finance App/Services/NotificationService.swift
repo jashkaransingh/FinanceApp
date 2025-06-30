@@ -37,80 +37,94 @@ final class NotificationService {
   /// Schedules *one* notification for the next 8:30 AM with up-to-date content.
   /// Call this each time the app launches (or after user opens the app), so that
   /// you always have a fresh notification queued.
-  func scheduleTomorrowMorning() {
-    // 1) Compute “yesterday” and “day before yesterday”
-    let calendar = Calendar.current
-    let today     = Date()
-    guard
-      let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
-      let twoDaysAgo = calendar.date(byAdding: .day, value: -2, to: today)
-    else { return }
-
-    // 2) Fetch spending for those two dates
-    fetchTotalSpending(on: yesterday) { [weak self] spentYesterday in
-      self?.fetchTotalSpending(on: twoDaysAgo) { spentDayBefore in
-        // 3) Build notification content
-        let delta    = spentDayBefore - spentYesterday
-        let pct      = (spentDayBefore > 0)
-          ? delta / spentDayBefore * 100
-          : 0
-
-        let fmt = NumberFormatter()
-        fmt.numberStyle = .currency
-
-        let spentYStr  = fmt.string(from: spentYesterday as NSNumber)  ?? "$0.00"
-        let deltaStr   = fmt.string(from: delta as NSNumber)         ?? "$0.00"
-        let pctStr     = String(format: "%.0f%%", pct)
-
-        let content = UNMutableNotificationContent()
-        content.title = "Yesterday you spent \(spentYStr)"
-        content.body  = "That's \(deltaStr) (\(pctStr)) less than the day before."
-        content.sound = .default
-
-        // 4) Build a trigger for next 8:30 AM
-        var comps = calendar.dateComponents([.year, .month, .day], from: today)
-        comps.hour   = 8
-        comps.minute = 30
-        // If 8:30 has already passed today, schedule for tomorrow:
-          if let fireDate = calendar.date(from: comps), fireDate <= today {
-            comps.day! += 1
-          }
-        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-
-        // 5) Remove any existing pending request and enqueue this one
-        let id = "dailySpendingNotification"
-        self?.center.removePendingNotificationRequests(withIdentifiers: [id])
-        let req = UNNotificationRequest(identifier: id,
-                                        content: content,
-                                        trigger: trigger)
-        self?.center.add(req) { error in
-          if let err = error {
-            print("🚨 Failed to schedule notification:", err)
-          }
+    func scheduleTomorrowMorning() {
+            let calendar = Calendar.current
+            let today = Date()
+            guard
+                let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
+                let twoDaysAgo = calendar.date(byAdding: .day, value: -2, to: today)
+            else { return }
+            
+            // Use a DispatchGroup to wait for both network calls to complete.
+            let group = DispatchGroup()
+            
+            var spentYesterday: Double = 0
+            var spentDayBefore: Double = 0
+            
+            group.enter()
+            fetchTotalSpending(on: yesterday) { total in
+                spentYesterday = total
+                group.leave()
+            }
+            
+            group.enter()
+            fetchTotalSpending(on: twoDaysAgo) { total in
+                spentDayBefore = total
+                group.leave()
+            }
+            
+            // This block executes only after both fetch calls have finished.
+            group.notify(queue: .main) { [weak self] in
+                self?.buildAndScheduleNotification(spentYesterday: spentYesterday, spentDayBefore: spentDayBefore)
+            }
         }
-      }
-    }
-  }
 
   // MARK: - Helpers
 
-  /// Wraps your DataService.loadTransactionsBetween to sum all
-  /// transactions on a single date.
-  private func fetchTotalSpending(on date: Date,
-                                  completion: @escaping (Double) -> Void)
-  {
-      let dayStr = Self.isoDateFormatter.string(from: date)
-
-    // since your backend takes start/end ISO dates, pass the same
-    DataService.loadTransactions(
-      accessToken: UserDefaults.standard.string(forKey: "plaidAccessToken") ?? "",
-      startDate: dayStr,
-      endDate:   dayStr
-    ) { txs in
-      let total = txs.reduce(0.0) { $0 + $1.amount }
-      completion(total)
-    }
-  }
+    /// Wraps our new secure DataService to sum transactions on a single date.
+        private func fetchTotalSpending(on date: Date, completion: @escaping (Double) -> Void) {
+            let dayStr = Self.isoDateFormatter.string(from: date)
+            
+            // Call the new, secure function. No token needed!
+            DataService.loadTransactions(startDate: dayStr, endDate: dayStr) { result in
+                switch result {
+                case .success(let transactions):
+                    let total = transactions.reduce(0.0) { $0 + $1.amount }
+                    completion(total)
+                case .failure(let error):
+                    print("🚨 Notif Service failed to fetch transactions for \(dayStr):", error)
+                    completion(0) // Return 0 on failure
+                }
+            }
+        }
+    
+    /// Builds and schedules the notification content.
+        private func buildAndScheduleNotification(spentYesterday: Double, spentDayBefore: Double) {
+            let delta = spentDayBefore - spentYesterday
+            let pct = (spentDayBefore > 0) ? (delta / spentDayBefore * 100) : 0
+            
+            let fmt = NumberFormatter()
+            fmt.numberStyle = .currency
+            
+            let spentYStr = fmt.string(from: spentYesterday as NSNumber) ?? "$0.00"
+            let deltaStr = fmt.string(from: abs(delta) as NSNumber) ?? "$0.00"
+            let changeWord = delta >= 0 ? "less" : "more"
+            
+            let content = UNMutableNotificationContent()
+            content.title = "Yesterday you spent \(spentYStr)"
+            content.body = "That's \(deltaStr) (\(String(format: "%.0f%%", abs(pct)))) \(changeWord) than the day before."
+            content.sound = .default
+            
+            // Build trigger for next 8:30 AM
+            var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+            comps.hour = 8
+            comps.minute = 30
+            if let fireDate = Calendar.current.date(from: comps), fireDate <= Date() {
+                 comps.day = (comps.day ?? 1) + 1
+            }
+            
+            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+            let id = "dailySpendingNotification"
+            center.removePendingNotificationRequests(withIdentifiers: [id])
+            let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+            center.add(req) { error in
+                if let err = error {
+                    print("🚨 Failed to schedule notification:", err)
+                } else {
+                    print("✅ Daily spending notification scheduled.")
+                }
+            }
+        }
     /// In NotificationService
     func scheduleTestNotification(after seconds: TimeInterval = 5) {
       let content = UNMutableNotificationContent()
