@@ -375,5 +375,78 @@
         "subtitle": "Credit card payment"
       }
     }
+  },
+  "PS0JI19UcROjW9BeoNtB0b79RJb2:150:initial": {
+    "2025-W27": {
+      "Transportation": {
+        "amount": 10,
+        "percent": 6,
+        "subtitle": "Uber, public transit"
+      },
+      "Food": {
+        "amount": 15,
+        "percent": 10,
+        "subtitle": "McDonald's, Starbucks, KFC"
+      },
+      "Recreation": {
+        "amount": 10,
+        "percent": 6,
+        "subtitle": "Touchstone Climbing, SparkFun"
+      },
+      "Debt Payments": {
+        "amount": 5,
+        "percent": 3,
+        "subtitle": "Credit card payment"
+      },
+      "Savings": {
+        "amount": 110,
+        "percent": 73,
+        "subtitle": "General savings"
+      }
+    }
+  },
+  "PS0JI19UcROjW9BeoNtB0b79RJb2:200:initial": {
+    "2025-W27": {
+      "Transportation": {
+        "amount": 10,
+        "percent": 5,
+        "subtitle": "Uber, Public Transit"
+      },
+      "Food": {
+        "amount": 15,
+        "percent": 7,
+        "subtitle": "KFC, McDonald's, Starbucks"
+      },
+      "Recreation": {
+        "amount": 10,
+        "percent": 5,
+        "subtitle": "Touchstone Climbing"
+      },
+      "Shopping": {
+        "amount": 15,
+        "percent": 7,
+        "subtitle": "SparkFun"
+      },
+      "Debt Payments": {
+        "amount": 10,
+        "percent": 5,
+        "subtitle": "Credit Card Payment"
+      },
+      "Savings": {
+        "amount": 130,
+        "percent": 65,
+        "subtitle": "Emergency, future goals"
+      },
+      "Miscellaneous": {
+        "amount": 0,
+        "percent": 0,
+        "subtitle": "Unforeseen expenses"
+      },
+      "Travel": {
+        "amount": 0,
+        "percent": 0,
+        "subtitle": "Future travel plans"
+      }
+    }
   }
 }

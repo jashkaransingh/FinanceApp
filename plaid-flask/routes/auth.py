@@ -123,7 +123,9 @@ def remove_item():
         })
         
         print(f"✅ Successfully removed Plaid item and cleaned up Firestore for user {uid}")
-        return jsonify(success=True, removed=response['removed'])
+        # The response object doesn't have a 'removed' key.
+        # A simple success JSON is all that's needed. The 200 OK status is what the client checks.
+        return jsonify(success=True)
 
     except Exception as e:
         traceback.print_exc()

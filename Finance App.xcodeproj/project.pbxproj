@@ -490,6 +490,7 @@
 				DEVELOPMENT_TEAM = 8BP98H3BD8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Finance App/Info.plist";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "To secure your financial data";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app needs to connect to your local development server";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
@@ -519,6 +520,7 @@
 				DEVELOPMENT_TEAM = 8BP98H3BD8;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Finance App/Info.plist";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "To secure your financial data";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "This app needs to connect to your local development server";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
