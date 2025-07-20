@@ -13,7 +13,7 @@ class LinkButton: UIButton {
     init(title: String) {
         super.init(frame: .zero)
         setTitle(title, for: .normal)
-        setTitleColor(.systemBlue, for: .normal)
+        setTitleColor(UIColor.white.withAlphaComponent(0.8), for: .normal)
         titleLabel?.font = .systemFont(ofSize: 14)
         backgroundColor = .clear
         translatesAutoresizingMaskIntoConstraints = false

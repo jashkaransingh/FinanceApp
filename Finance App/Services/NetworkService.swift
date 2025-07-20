@@ -72,16 +72,16 @@ struct NetworkService {
     }
 
     /// Executes an authenticated JSON POST request.
-    static func postJSON<T: Decodable>(
+    static func postJSON<T: Decodable, B: Encodable>(
         to url: URL,
-        body: [String: Any],
+    body: B,
         decodeTo type: T.Type,
         completion: @escaping (Result<T, Error>) -> Void
     ) {
         var request = URLRequest(url: url)
         request.httpMethod = HTTPMethod.post.rawValue
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        request.httpBody = try? JSONEncoder().encode(body)
         
         // Use our new central executor
         executeRequest(request, decodeTo: type, completion: completion)

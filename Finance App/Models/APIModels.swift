@@ -9,7 +9,7 @@ import Foundation
 
 // MARK: - Core Data Models
 
-struct Transaction: Decodable, Hashable {
+struct Transaction: Codable, Hashable {
     let name: String
     let amount: Double
     let date: String // "yyyy-MM-dd"
@@ -25,11 +25,28 @@ struct AccountSummary: Decodable {
 }
 
 /// The structure of one item within the AI's budget suggestion.
-struct CategoryBudget: Decodable {
+struct CategoryBudget: Codable {
     let amount: Int
     let percent: Int
     let subtitle: String
 }
+struct PlanItem: Codable {
+    let amount: Double
+    let percent: Double
+    let subtitle: String
+}
+
+struct EmptyBody: Encodable { }
+
+// Represents the request to exchange a public token.
+struct ExchangeTokenRequest: Encodable {
+    let publicToken: String
+    
+    enum CodingKeys: String, CodingKey {
+        case publicToken = "public_token"
+    }
+}
+
 
 struct AISuggestionResponse: Decodable {
     // This now correctly decodes the dynamic keys (e.g., "Food", "Transportation")
@@ -54,10 +71,6 @@ struct LinkTokenResponse: Decodable {
     let link_token: String
 }
 
-/// Used for the /remove_item endpoint.
-struct ItemRemoveResponse: Decodable {
-    let removed: Bool
-}
 
 /// A generic response for any endpoint that just returns {"success": true}.
 struct GenericSuccessResponse: Decodable {

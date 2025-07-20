@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4138125E2E1CA34700977635 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 4138125D2E1CA34700977635 /* GoogleSignIn */; };
 		413EA1D92DE56CDC00545123 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 413EA1D82DE56CDC00545123 /* FirebaseAuth */; };
 		413EA1DB2DE56CDC00545123 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 413EA1DA2DE56CDC00545123 /* FirebaseCore */; };
 		413EA2142DE6A9DD00545123 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 413EA2132DE6A9DD00545123 /* FirebaseFirestore */; };
@@ -76,6 +77,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Models/SummaryEntry.swift,
+				Services/SharedDataManager.swift,
 			);
 			target = 413EA3802DEE44D400545123 /* FinanceWidgetsExtension */;
 		};
@@ -132,6 +134,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4138125E2E1CA34700977635 /* GoogleSignIn in Frameworks */,
 				41C5E7C22DD6E6C1005392C0 /* LinkKit in Frameworks */,
 				413EA2142DE6A9DD00545123 /* FirebaseFirestore in Frameworks */,
 				413EA1DB2DE56CDC00545123 /* FirebaseCore in Frameworks */,
@@ -237,6 +240,7 @@
 				413EA1D82DE56CDC00545123 /* FirebaseAuth */,
 				413EA1DA2DE56CDC00545123 /* FirebaseCore */,
 				413EA2132DE6A9DD00545123 /* FirebaseFirestore */,
+				4138125D2E1CA34700977635 /* GoogleSignIn */,
 			);
 			productName = "Finance App";
 			productReference = 41C5E72A2DB49EA1005392C0 /* Finance App.app */;
@@ -326,6 +330,7 @@
 			packageReferences = (
 				41C5E7C02DD6E6C1005392C0 /* XCRemoteSwiftPackageReference "plaid-link-ios" */,
 				413EA1D72DE56CDC00545123 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				4138125C2E1CA34700977635 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 41C5E72B2DB49EA1005392C0 /* Products */;
@@ -434,7 +439,7 @@
 				INFOPLIST_FILE = FinanceWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = FinanceWidgets;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -463,7 +468,7 @@
 				INFOPLIST_FILE = FinanceWidgets/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = FinanceWidgets;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.4;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -781,6 +786,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		4138125C2E1CA34700977635 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.0.0;
+			};
+		};
 		413EA1D72DE56CDC00545123 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
@@ -800,6 +813,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		4138125D2E1CA34700977635 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 4138125C2E1CA34700977635 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
 		413EA1D82DE56CDC00545123 /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 413EA1D72DE56CDC00545123 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;

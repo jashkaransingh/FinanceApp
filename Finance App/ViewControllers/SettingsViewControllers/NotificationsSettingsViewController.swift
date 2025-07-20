@@ -7,119 +7,256 @@
 
 import UIKit
 
-final class NotificationsSettingsViewController: UITableViewController {
-  
-  // MARK: – Notification Options
-
-  private enum Option: Int, CaseIterable {
-    case dailySummary
-    case weeklySummary
-    case weekendAlerts
-
-    /// The title that appears in the cell
-    var title: String {
-      switch self {
-      case .dailySummary:  return "Daily Summary"
-      case .weeklySummary: return "Weekly Summary"
-      case .weekendAlerts: return "Weekend Alerts"
-      }
-    }
-
-    /// Key for UserDefaults
-    var userDefaultsKey: String {
-      switch self {
-      case .dailySummary:  return "notifications_dailySummary"
-      case .weeklySummary: return "notifications_weeklySummary"
-      case .weekendAlerts: return "notifications_weekendAlerts"
-      }
-    }
-  }
-  
-  // MARK: – Lifecycle
-
-  override func viewDidLoad() {
-    super.viewDidLoad()
-    title = "Notifications"
-    configureTableView()
-  }
-
-  // MARK: – Setup
-
-  private func configureTableView() {
-    tableView = UITableView(frame: .zero, style: .insetGrouped)
-    tableView.register(UITableViewCell.self,
-                       forCellReuseIdentifier: "NotificationCell")
-  }
-
-  // MARK: – Data Source
-
-  override func numberOfSections(in tableView: UITableView) -> Int {
-    1  // only one section of toggles
-  }
-
-  override func tableView(_ tv: UITableView,
-                          numberOfRowsInSection section: Int) -> Int
-  {
-    Option.allCases.count
-  }
-
-  override func tableView(_ tv: UITableView,
-                          cellForRowAt indexPath: IndexPath)
-    -> UITableViewCell
-  {
-    let cell = tv.dequeueReusableCell(
-      withIdentifier: "NotificationCell",
-      for: indexPath
-    )
-
-    let opt = Option(rawValue: indexPath.row)!
-    cell.textLabel?.text = opt.title
-    cell.selectionStyle = .none
-
-    // build the switch
-    let toggle = UISwitch()
-    toggle.isOn = UserDefaults.standard.bool(forKey: opt.userDefaultsKey)
-    toggle.tag = opt.rawValue
-    toggle.addTarget(self,
-                     action: #selector(didToggleOption(_:)),
-                     for: .valueChanged)
-
-    cell.accessoryView = toggle
-    return cell
-  }
-
-  // MARK: – Actions
-
-  @objc private func didToggleOption(_ sender: UISwitch) {
-    guard let opt = Option(rawValue: sender.tag) else { return }
-
-    // 1) persist the new value
-    UserDefaults.standard.set(sender.isOn, forKey: opt.userDefaultsKey)
-
-    // 2) schedule or cancel your local notifications
-    //    (insert your actual scheduling code here)
-    switch opt {
-    case .dailySummary:
-      if sender.isOn {
-        // scheduleDailySummaryNotification()
-      } else {
-        // cancelDailySummaryNotification()
-      }
-
-    case .weeklySummary:
-      if sender.isOn {
-        // scheduleWeeklySummaryNotification()
-      } else {
-        // cancelWeeklySummaryNotification()
-      }
-
-    case .weekendAlerts:
-      if sender.isOn {
-        // scheduleWeekendAlerts()
-      } else {
-        // cancelWeekendAlerts()
-      }
-    }
-  }
+// MARK: - Delegate Protocols
+protocol ToggleCellDelegate: AnyObject {
+    func didToggleSwitch(for type: NotificationType, isOn: Bool)
 }
+
+protocol TimePickerCellDelegate: AnyObject {
+    func didChangeTime(for type: NotificationType, newTime: DateComponents)
+}
+
+// MARK: - NotificationsSettingsViewController
+final class NotificationsSettingsViewController: UITableViewController {
+    
+    // MARK: - Section & Row Models
+    private struct Section {
+        let title: String?
+        var rows: [Row]
+    }
+    
+    enum Row {
+        case toggle(icon: String, title: String, subtitle: String, type: NotificationType)
+        case timePicker(type: NotificationType)
+    }
+    
+    private var sections: [Section] = []
+    
+    // MARK: - Lifecycle & Setup
+    override init(style: UITableView.Style) {
+        super.init(style: .insetGrouped)
+    }
+    
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Notifications"
+        configureTableView()
+        buildSections()
+    }
+    
+    private func configureTableView() {
+        tableView.register(ToggleCell.self, forCellReuseIdentifier: "ToggleCell")
+        tableView.register(TimePickerCell.self, forCellReuseIdentifier: "TimePickerCell")
+        tableView.rowHeight = UITableView.automaticDimension
+    }
+    
+    private func buildSections() {
+        let dailySummaryPlaceholder = NotificationType.dailySummary(context: .init(spentYesterday: 0, spentDayBefore: 0))
+        let dailySummaryEnabled = UserDefaults.standard.bool(forKey: dailySummaryPlaceholder.userDefaultsKey!)
+        
+        var summaryRows: [Row] = [
+            .toggle(icon: "calendar.day.timeline.left", title: "Daily Summary", subtitle: "A look at yesterday's spending.", type: dailySummaryPlaceholder),
+        ]
+        
+        if dailySummaryEnabled {
+            summaryRows.append(.timePicker(type: dailySummaryPlaceholder))
+        }
+        
+        sections = [
+            Section(title: "SUMMARIES", rows: summaryRows),
+            Section(title: "ALERTS", rows: [
+                .toggle(icon: "exclamationmark.triangle", title: "Budget Alerts", subtitle: "Get notified when you're near a spending limit.", type: .budgetNearLimit(context: .init(category: "", percent: nil))),
+                .toggle(icon: "sparkles", title: "Weekend Alerts", subtitle: "A friendly reminder on Saturday & Sunday.", type: .weekendAlert)
+            ])
+        ]
+    }
+    
+    // MARK: - UITableViewDataSource
+    override func numberOfSections(in tableView: UITableView) -> Int { return sections.count }
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { return sections[section].rows.count }
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? { return sections[section].title }
+    
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let row = sections[indexPath.section].rows[indexPath.row]
+        
+        switch row {
+        case .toggle(let icon, let title, let subtitle, let type):
+            let cell = tableView.dequeueReusableCell(withIdentifier: "ToggleCell", for: indexPath) as! ToggleCell
+            cell.configure(icon: icon, title: title, subtitle: subtitle, type: type)
+            cell.delegate = self
+            return cell
+            
+        case .timePicker(let type):
+            let cell = tableView.dequeueReusableCell(withIdentifier: "TimePickerCell", for: indexPath) as! TimePickerCell
+            cell.configure(for: type)
+            cell.delegate = self
+            return cell
+        }
+    }
+    
+    override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        let row = sections[indexPath.section].rows[indexPath.row]
+        return row.isToggle ? UITableView.automaticDimension : 160
+    }
+}
+
+// MARK: - CellDelegate Conformance
+extension NotificationsSettingsViewController: ToggleCellDelegate, TimePickerCellDelegate {
+    
+    func didToggleSwitch(for type: NotificationType, isOn: Bool) {
+        guard let key = type.userDefaultsKey else { return }
+        UserDefaults.standard.set(isOn, forKey: key)
+        
+        if isOn {
+            if case .dailySummary = type {
+                NotificationService.shared.refreshDailySummaryNotification()
+            } else {
+                NotificationService.shared.scheduleNotification(for: type)
+            }
+        } else {
+            NotificationService.shared.cancelNotification(for: type)
+        }
+        
+        if case .dailySummary = type {
+            tableView.performBatchUpdates {
+                self.buildSections()
+                let timePickerIndexPath = IndexPath(row: 1, section: 0)
+                if isOn {
+                    tableView.insertRows(at: [timePickerIndexPath], with: .fade)
+                } else {
+                    tableView.deleteRows(at: [timePickerIndexPath], with: .fade)
+                }
+            }
+        }
+    }
+    
+    func didChangeTime(for type: NotificationType, newTime: DateComponents) {
+        NotificationService.shared.saveTime(for: type, components: newTime)
+        
+        if case .dailySummary = type {
+            NotificationService.shared.refreshDailySummaryNotification(at: newTime)
+        }
+    }
+}
+
+// MARK: - Custom Cells
+class ToggleCell: UITableViewCell {
+    weak var delegate: ToggleCellDelegate?
+    private var type: NotificationType?
+    
+    private let iconImageView = UIImageView()
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let toggle = UISwitch()
+    
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        setupUI()
+    }
+    
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    
+    func configure(icon: String, title: String, subtitle: String, type: NotificationType) {
+        self.type = type
+        iconImageView.image = UIImage(systemName: icon)
+        titleLabel.text = title
+        subtitleLabel.text = subtitle
+        if let key = type.userDefaultsKey {
+            toggle.isOn = UserDefaults.standard.bool(forKey: key)
+        }
+        selectionStyle = .none
+    }
+    
+    // FIX: Restored the complete UI setup code that was missing.
+    private func setupUI() {
+        iconImageView.tintColor = .label
+        iconImageView.contentMode = .center
+        
+        titleLabel.font = .systemFont(ofSize: 17)
+        subtitleLabel.font = .systemFont(ofSize: 13)
+        subtitleLabel.textColor = .secondaryLabel
+        subtitleLabel.numberOfLines = 0
+        
+        toggle.addTarget(self, action: #selector(handleToggle), for: .valueChanged)
+        
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        textStack.axis = .vertical
+        
+        let mainStack = UIStackView(arrangedSubviews: [iconImageView, textStack, toggle])
+        mainStack.axis = .horizontal
+        mainStack.spacing = 16
+        mainStack.alignment = .center
+        
+        contentView.addSubview(mainStack)
+        mainStack.translatesAutoresizingMaskIntoConstraints = false
+        
+        NSLayoutConstraint.activate([
+            iconImageView.widthAnchor.constraint(equalToConstant: 30),
+            mainStack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            mainStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            mainStack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 12),
+            mainStack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12)
+        ])
+    }
+    
+    @objc private func handleToggle() {
+        guard let type = type else { return }
+        delegate?.didToggleSwitch(for: type, isOn: toggle.isOn)
+    }
+}
+
+class TimePickerCell: UITableViewCell {
+    weak var delegate: TimePickerCellDelegate?
+    private var type: NotificationType?
+    
+    private let datePicker = UIDatePicker()
+    
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        setupUI()
+    }
+    
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    
+    func configure(for type: NotificationType) {
+        self.type = type
+        let components = NotificationService.shared.getStoredTime(for: type)
+        datePicker.date = Calendar.current.date(from: components) ?? Date()
+    }
+    
+    // FIX: Restored the complete UI setup code that was missing.
+    private func setupUI() {
+        datePicker.datePickerMode = .time
+        datePicker.preferredDatePickerStyle = .wheels
+        datePicker.addTarget(self, action: #selector(handleTimeChange), for: .valueChanged)
+        
+        contentView.addSubview(datePicker)
+        datePicker.translatesAutoresizingMaskIntoConstraints = false
+        
+        NSLayoutConstraint.activate([
+            datePicker.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            datePicker.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            datePicker.topAnchor.constraint(equalTo: contentView.topAnchor),
+            datePicker.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+        ])
+    }
+    
+    @objc private func handleTimeChange() {
+        guard let type = type else { return }
+        let components = Calendar.current.dateComponents([.hour, .minute], from: datePicker.date)
+        delegate?.didChangeTime(for: type, newTime: components)
+    }
+}
+
+// Helper extension for the Row enum
+extension NotificationsSettingsViewController.Row {
+    var isToggle: Bool {
+        if case .toggle = self { return true }
+        return false
+    }
+}
+
+
 

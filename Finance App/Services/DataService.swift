@@ -7,21 +7,54 @@
 
 import Foundation
 
-// Encapsulates all authenticated network calls to your backend.
+// MARK: - Network Request Models (NEW)
+// These new structs provide a type-safe way to create the JSON body for POST requests.
+// They are based on the parameters from your original DataService functions.
+
+struct AISuggestionRequest: Encodable {
+    let transactions: [Transaction]
+    let weeklyBudget: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case transactions
+        case weeklyBudget = "weekly_budget"
+    }
+}
+
+struct AIReallocationRequest: Encodable {
+    // Note: It's better to use a Codable struct for 'currentPlan' instead of [String: [String: Any]]
+    // but for now, this matches your original code. For true safety, 'currentPlan' should also be a struct.
+    let transactions: [Transaction]
+    let currentPlan: [String: PlanItem]
+    let lockedCategory: String
+    let newValue: Int
+    let totalBudget: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case transactions
+        case currentPlan = "current_plan"
+        case lockedCategory = "locked_category"
+        case newValue = "new_value"
+        case totalBudget = "total_budget"
+    }
+}
+
+struct SaveBudgetPlanRequest: Encodable {
+    let budgetPlan: [String: CategoryBudget]
+    let totalBudget: Int
+}
+
+
+// MARK: - DataService (Refactored)
+
+/// Encapsulates all authenticated network calls to your backend.
 class DataService {
 
     /// Fetches account summaries for the main dashboard.
     static func loadSummaries(completion: @escaping (Result<[AccountSummary], Error>) -> Void) {
-        NetworkService.getJSON(
-            from: API.summaries.url,
-            decodeTo: SummariesResponse.self
-        ) { result in
-            switch result {
-            case .success(let response):
-                completion(.success(response.summaries))
-            case .failure(let error):
-                completion(.failure(error))
-            }
+        // REFACTORED: Use .map for a cleaner completion handler.
+        NetworkService.getJSON(from: API.summaries.url, decodeTo: SummariesResponse.self) { result in
+            completion(result.map { $0.summaries })
         }
     }
 
@@ -32,17 +65,10 @@ class DataService {
         completion: @escaping (Result<[Transaction], Error>) -> Void
     ) {
         let queries = ["start_date": startDate, "end_date": endDate]
-        NetworkService.getJSON(
-            from: API.transactions.url,
-            queries: queries,
-            decodeTo: TransactionsResponse.self
-        ) { result in
-            switch result {
-            case .success(let response):
-                completion(.success(response.transactions))
-            case .failure(let error):
-                completion(.failure(error))
-            }
+        
+        // REFACTORED: Removed widget update logic (side effect). This service's only job is to fetch data.
+        NetworkService.getJSON(from: API.transactions.url, queries: queries, decodeTo: TransactionsResponse.self) { result in
+            completion(result.map { $0.transactions })
         }
     }
 
@@ -52,92 +78,58 @@ class DataService {
         budget: Int,
         completion: @escaping (Result<[String: CategoryBudget], Error>) -> Void
     ) {
-        let transactionPayload = transactions.map { ["name": $0.name, "amount": $0.amount] }
-        let body: [String: Any] = [
-            "transactions": transactionPayload,
-            "weekly_budget": budget
-        ]
-
-        NetworkService.postJSON(
-            to: API.aiSummary.url,
-            body: body,
-            decodeTo: AISuggestionResponse.self
-        ) { result in
+        // REFACTORED: Use a type-safe, Encodable struct for the request body.
+        let requestBody = AISuggestionRequest(transactions: transactions, weeklyBudget: budget)
+        
+        NetworkService.postJSON(to: API.aiSummary.url, body: requestBody, decodeTo: AISuggestionResponse.self) { result in
+            completion(result.map { $0.suggestion })
+        }
+    }
+    
+    // NOTE: For full type-safety, the 'currentPlan' parameter should also be a Codable struct.
+    static func fetchAIReallocation(
+        transactions: [Transaction],
+        currentPlan: [String: PlanItem],
+        lockedCategory: String,
+        newValue: Int,
+        totalBudget: Int,
+        completion: @escaping (Result<[String: CategoryBudget], Error>) -> Void
+    ) {
+        let requestBody = AIReallocationRequest(
+            transactions: transactions,
+            currentPlan: currentPlan,
+            lockedCategory: lockedCategory,
+            newValue: newValue,
+            totalBudget: totalBudget
+        )
+        
+        NetworkService.postJSON(to: API.aiSummary.url, body: requestBody, decodeTo: AISuggestionResponse.self) { result in
+            completion(result.map { $0.suggestion })
+        }
+    }
+    
+    /// Saves the user's current budget plan to the backend.
+    static func saveBudgetPlan(
+        plan: [String: CategoryBudget],
+        totalBudget: Int,
+        completion: @escaping (Bool) -> Void
+    ) {
+        let requestBody = SaveBudgetPlanRequest(budgetPlan: plan, totalBudget: totalBudget)
+        
+        NetworkService.postJSON(to: API.budget.url, body: requestBody, decodeTo: GenericSuccessResponse.self) { result in
             switch result {
             case .success(let response):
-                completion(.success(response.suggestion))
+                completion(response.success)
             case .failure(let error):
-                completion(.failure(error))
+                print("❌ Failed to save budget plan:", error)
+                completion(false)
             }
         }
     }
-    /// Fetches an AI-based reallocation plan.
-        static func fetchAIReallocation(
-            transactions: [Transaction],
-            currentPlan: [String: [String: Any]],
-            lockedCategory: String,
-            newValue: Int,
-            totalBudget: Int,
-            completion: @escaping (Result<[String: CategoryBudget], Error>) -> Void
-        ) {
-            let payload: [String: Any] = [
-                "transactions": transactions.map { ["name": $0.name, "amount": $0.amount] },
-                "current_plan": currentPlan,
-                "locked_category": lockedCategory,
-                "new_value": newValue,
-                "total_budget": totalBudget
-            ]
-
-            // We re-use the same AI endpoint and response model
-            NetworkService.postJSON(
-                to: API.aiSummary.url, // Assumes your AI endpoint handles both initial and reallocation
-                body: payload,
-                decodeTo: AISuggestionResponse.self
-            ) { result in
-                switch result {
-                case .success(let response):
-                    completion(.success(response.suggestion))
-                case .failure(let error):
-                    completion(.failure(error))
-                }
-            }
-        }
-    /// Saves the user's current budget plan to Firestore via the backend.
-        static func saveBudgetPlan(
-            plan: [String: CategoryBudget],
-            totalBudget: Int,
-            completion: @escaping (Bool) -> Void
-        ) {
-            // The plan needs to be converted to [String: Any] for JSON serialization.
-            let planPayload = plan.mapValues { ["amount": $0.amount, "percent": $0.percent, "subtitle": $0.subtitle] }
-            
-            let body: [String: Any] = [
-                "budgetPlan": planPayload,
-                "totalBudget": totalBudget
-            ]
-            
-            NetworkService.postJSON(
-                to: API.budget.url,
-                body: body,
-                decodeTo: GenericSuccessResponse.self
-            ) { result in
-                switch result {
-                case .success(let response):
-                    completion(response.success)
-                case .failure(let error):
-                    print("❌ Failed to save budget plan:", error)
-                    completion(false)
-                }
-            }
-        }
-        
-        /// Loads an existing budget plan from Firestore via the backend.
-        static func loadBudgetPlan(completion: @escaping (Result<LoadBudgetResponse, Error>) -> Void) {
-            NetworkService.getJSON(
-                from: API.budget.url,
-                decodeTo: LoadBudgetResponse.self,
-                completion: completion
-            )
-        }
+    
+    /// Loads an existing budget plan from the backend.
+    static func loadBudgetPlan(completion: @escaping (Result<LoadBudgetResponse, Error>) -> Void) {
+        NetworkService.getJSON(from: API.budget.url, decodeTo: LoadBudgetResponse.self, completion: completion)
+    }
 }
 

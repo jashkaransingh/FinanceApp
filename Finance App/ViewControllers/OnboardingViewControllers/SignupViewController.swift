@@ -7,72 +7,97 @@
 
 import UIKit
 
-class SignupViewController: UIViewController {
+final class SignupViewController: BaseAuthViewController {
     
-    private let emailField = CustomTextField(placeholder: "Email")
-    private let passwordField = CustomTextField(placeholder: "Password", isSecure: true)
-    private let signupButton = PrimaryButton(title: "Sign Up")
-    private let nameField = CustomTextField(placeholder: "Full Name")
-
-
+    // MARK: - Unique UI Properties
+    private let nameField = AuthTextField(icon: UIImage(systemName: "person.fill"))
+    private let signupButton = PrimaryButton(title: "Create Account")
+    
+    // MARK: - Lifecycle
     override func viewDidLoad() {
+        // This calls all the setup methods in the base class first
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
-        title = "Sign Up"
-        setupSubviews()
-        setupConstraints()
+        
+        // Now, configure the unique parts for this screen
+        titleLabel.text = "Create Account"
+        subtitleLabel.text = "Start tracking your finances."
+        
+        setupUniqueSubviews()
+        setupUniqueConstraints()
+        setupUniqueTargets()
     }
     
-    private func setupSubviews() {
-            [nameField, emailField, passwordField, signupButton].forEach {
-                view.addSubview($0)
-                $0.translatesAutoresizingMaskIntoConstraints = false
-            }
-            signupButton.addTarget(self, action: #selector(handleSignup), for: .touchUpInside)
-        }
+    // MARK: - Unique Setup
+    private func setupUniqueSubviews() {
+        nameField.textField.placeholder = "Full Name"
+        
+        guard let cardContentView = (glassCard.subviews.first as? UIVisualEffectView)?.contentView else { return }
+        
+        cardContentView.addSubview(nameField)
+        cardContentView.addSubview(signupButton)
+    }
     
-    private func setupConstraints() {
-            NSLayoutConstraint.activate([
-                
-                nameField.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 80),
-                nameField.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-                nameField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-                
-                emailField.topAnchor.constraint(equalTo: nameField.bottomAnchor, constant: 16),
-                emailField.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-                emailField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-                
-                passwordField.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: 16),
-                passwordField.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
-                passwordField.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
-                
-                signupButton.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: 24),
-                signupButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
-                signupButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor)
-            ])
-        }
+    private func setupUniqueConstraints() {
+        [nameField, signupButton].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+        
+        NSLayoutConstraint.activate([
+            // Constraint chain inside the card
+            nameField.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: 24),
+            nameField.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 20),
+            nameField.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -20),
+            
+            emailField.topAnchor.constraint(equalTo: nameField.bottomAnchor, constant: 16),
+            
+            passwordField.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: 16),
+            
+            signupButton.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: 24),
+            signupButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
+            signupButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
+            
+            separatorLabel.topAnchor.constraint(equalTo: signupButton.bottomAnchor, constant: 20),
+            
+            appleSignInButton.topAnchor.constraint(equalTo: separatorLabel.bottomAnchor, constant: 16),
+            appleSignInButton.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -24),
+        ])
+    }
     
+    private func setupUniqueTargets() {
+        signupButton.addTarget(self, action: #selector(handleSignup), for: .touchUpInside)
+    }
+    
+    // MARK: - Unique Actions
     @objc private func handleSignup() {
-        guard
-            let name = nameField.text?.trimmingCharacters(in: .whitespacesAndNewlines),
-            let email = emailField.text?.trimmingCharacters(in: .whitespacesAndNewlines),
-            let password = passwordField.text?.trimmingCharacters(in: .whitespacesAndNewlines)
-        else { return }
-
-        AuthService.register(email: email, password: password, name: name) { success in
+        guard let name = nameField.textField.text, !name.isEmpty,
+              let email = emailField.textField.text, !email.isEmpty,
+              let password = passwordField.textField.text, !password.isEmpty else {
+            showAlert(title: "Missing Information", message: "Please fill out all fields.")
+            return
+        }
+        
+        setLoading(true)
+        AuthService.register(email: email, password: password, name: name) { [weak self] success in
+            guard let self = self else { return }
+            self.setLoading(false)
             if success {
                 SceneDelegate.switchToMainApp()
             } else {
-                self.presentAlert(title: "Signup Failed", message: "Please try again.")
+                self.showAlert(title: "Registration Failed", message: "An error occurred during registration.")
             }
         }
     }
-
-    private func presentAlert(title: String, message: String) {
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default, handler: nil))
-        present(alert, animated: true, completion: nil)
+    
+    // MARK: - Overrides
+    override func setLoading(_ isLoading: Bool) {
+        signupButton.isEnabled = !isLoading
+        appleSignInButton.isEnabled = !isLoading
+        googleSignInButton.isEnabled = !isLoading
+        
+        nameField.isUserInteractionEnabled = !isLoading
+        emailField.isUserInteractionEnabled = !isLoading
+        passwordField.isUserInteractionEnabled = !isLoading
+        
+        let buttonTitle = isLoading ? "Creating Account..." : "Create Account"
+        signupButton.setTitle(buttonTitle, for: .normal)
     }
-
-
 }
+

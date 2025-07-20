@@ -13,10 +13,13 @@ import FirebaseFirestore
 
 class AccountsViewController: UIViewController {
     
+    
+    
     // MARK: - UI Properties
     private let headerView = TitleHeaderView()// 'My Accounts' header at top
     private let scrollView = UIScrollView()// Scrollable area for cards
     private let stackView  = UIStackView()// Vertical stack inside scrollView
+    private let refreshControl = UIRefreshControl()
     
     // MARK: – Data Properties
     private var summaries: [AccountSummary] = []//list of account summaries (fetched from backend)
@@ -33,6 +36,8 @@ class AccountsViewController: UIViewController {
         
         configureHeader()
         configureScrollView()
+        refreshControl.addTarget(self, action: #selector(refreshData), for: .valueChanged)
+        scrollView.addSubview(refreshControl)
         configureStackView()
         configureFloatingButton()
         setupActions()
@@ -71,14 +76,11 @@ class AccountsViewController: UIViewController {
             self?.openProfile()
         }
         
-        headerView.onDropdownTap = {
-            // e.g. show your account‐picker dropdown
-            print("Header tapped – menu should open now")
-        }
     }
     
     private func configureScrollView() {// Configures and constrains the scrollView below the header
         view.addSubview(scrollView)
+        scrollView.alwaysBounceVertical = true
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         
         NSLayoutConstraint.activate([
@@ -153,6 +155,10 @@ class AccountsViewController: UIViewController {
     
     // MARK: – Data Loading
     
+    @objc private func refreshData() {
+        fetchData()
+    }
+    
     /// Check Firestore for saved access token
     /// If found, save locally and load summaries
     /// Otherwise show a “Connect Bank” placeholder.
@@ -169,6 +175,7 @@ class AccountsViewController: UIViewController {
         docRef.getDocument { [weak self] document, error in
             guard let self = self, let document = document, document.exists else {
                 self?.showPlaceholder(message: "An error occurred.")
+                self?.refreshControl.endRefreshing()
                 return
             }
             
@@ -199,12 +206,27 @@ class AccountsViewController: UIViewController {
             case .success(let summaries):
                 self.summaries = summaries
                 self.populateCards()
-                self.storeSummariesForWidget(summaries)
                 HapticsManager.trigger(.medium)
+                // Now that summaries are loaded, also fetch recent transactions
+                // to ensure the widget gets updated.
+                let endDate = Date()
+                guard let startDate = Calendar.current.date(byAdding: .day, value: -7, to: endDate) else { return }
+                let formatter = ISO8601DateFormatter()
+                
+                DataService.loadTransactions(
+                    startDate: formatter.string(from: startDate),
+                    endDate: formatter.string(from: endDate)
+                ) { _ in
+                    // We don't need to do anything with the result here,
+                    // because the widget logic is handled inside DataService.
+                    print("Transactions fetched for widget update.")
+                }
+                // ---------------------
+                
             case .failure(let error):
                 print("❌ Failed to load summaries:", error)
-                // Optionally show an error message to the user
             }
+            self.refreshControl.endRefreshing()
         }
     }
     
@@ -213,6 +235,7 @@ class AccountsViewController: UIViewController {
         needsRefresh = false
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
         placeholderButton?.removeFromSuperview()
+        refreshControl.endRefreshing()
         
         let button = makeConnectButton()
         button.setTitle(message, for: .normal) // More flexible placeholder
@@ -280,7 +303,7 @@ class AccountsViewController: UIViewController {
     }
     
     @objc private func cardTapped(_ card: AccountCardView) {
-        guard//unwrap these 3 items below
+        guard//unwrap model
             let model = card.model
         else { return }
         
@@ -299,26 +322,21 @@ class AccountsViewController: UIViewController {
     
     @objc private func openProfile() {
         HapticsManager.trigger(.selection)
-        let settingsVC = SettingsViewController()
+        let settingsVC = SettingsViewController(style: .insetGrouped)
         navigationController?.pushViewController(settingsVC, animated: true)
     }
     
-    // MARK: – Widget Sync
-    private func storeSummariesForWidget(_ summaries: [AccountSummary]) {// Encode summaries and save to App Group for widget
-        let entries = summaries.map {
-            SummaryEntry(title: $0.periodTitle,
-                         amount: $0.amount,
-                         subtitle: $0.subtitle)
-        }
-        if let data = try? JSONEncoder().encode(entries) {
-            UserDefaults(suiteName: "group.com.your.bundle")?.set(data, forKey: "summaryData")
-        }
-    }
 }
 
-//User taps FAB → fabTapped()
-//App sends a POST request to /create_link_token on your Flask backend
-//Flask responds with a link_token → used to launch Plaid Link UI
-//User completes bank connection → get public_token
-//POST public_token to your Flask /exchange_public_token
-//Receive access_token → use it to fetch real data (accounts, transactions)
+// === Data Flow ===
+// 1. First Run / No Bank Linked:
+//    - The "Connect Your Bank" button is shown.
+//    - User taps it → startPlaidLinkFlow() is called.
+//    - PlaidService handles the link_token and public_token exchange.
+//    - On success, the view is refreshed → fetchData() is called again.
+//
+// 2. Bank Linked:
+//    - fetchData() checks Firestore and sees the bank is connected.
+//    - loadSummaries() is called → fetches account data from the backend.
+//    - Account cards are displayed.
+//    - The Floating Action Button (+) opens the Budget Assistant.

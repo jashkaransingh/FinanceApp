@@ -8,6 +8,7 @@
 import UIKit
 
 class ShimmerView: UIView {
+    
     private let gradientLayer = CAGradientLayer()
 
     override init(frame: CGRect) {
@@ -20,7 +21,9 @@ class ShimmerView: UIView {
     }
 
     private func setup() {
-        backgroundColor = .clear
+        backgroundColor = .systemGray5 // Give it a base color
+            layer.cornerRadius = 8
+        layer.masksToBounds = true
         gradientLayer.colors = [
             UIColor.systemGray5.cgColor,
             UIColor.systemGray4.cgColor,

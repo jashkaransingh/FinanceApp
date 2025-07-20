@@ -9,20 +9,14 @@
 import LinkKit
 import UIKit
 import FirebaseAuth
-import FirebaseFirestore
-
 
 /// Manages Plaid Link flows and backend exchanges
 final class PlaidService {
     static let shared = PlaidService()
     private init() {}
     
-    // MARK: – Properties
-    
     /// Keeps LinkKit handler alive between calls
     var linkHandler: LinkKit.Handler?
-    
-    // MARK: – Public Methods
     
     /// Starts the Plaid Link flow
     func startPlaidLink(
@@ -30,10 +24,10 @@ final class PlaidService {
         onSuccess: @escaping () -> Void,
         onError: @escaping (Error) -> Void
     ) {
-        // This now calls your secure /create_link_token endpoint via NetworkService
+        // FIX: Use the new, type-safe EmptyBody struct for requests with no body.
         NetworkService.postJSON(
             to: API.createLinkToken.url,
-            body: [:], // Body is empty, auth is in the header
+            body: EmptyBody(), // This is now explicit and safe.
             decodeTo: LinkTokenResponse.self
         ) { result in
             switch result {
@@ -58,7 +52,6 @@ final class PlaidService {
         onError: @escaping (Error) -> Void
     ) {
         var config = LinkTokenConfiguration(token: token) { linkSuccess in
-            // On success, call our new exchange function
             self.exchangePublicTokenOnBackend(linkSuccess.publicToken) { result in
                 switch result {
                 case .success:
@@ -75,7 +68,6 @@ final class PlaidService {
             }
         }
         
-        // Create and open the handler
         switch Plaid.create(config) {
         case .failure(let err):
             onError(err)
@@ -85,44 +77,32 @@ final class PlaidService {
         }
     }
     
-    // Tells the backend to securely unlink the user's account.
+    /// Tells the backend to securely unlink the user's account.
     func unlinkAccount(completion: @escaping (Result<Bool, Error>) -> Void) {
-        // We send an empty body because authentication is handled by the
-        // Firebase ID Token in the header, which NetworkService adds automatically.
+        // FIX: Use the EmptyBody struct here as well.
         NetworkService.postJSON(
             to: API.removeItem.url,
-            body: [:],
-            decodeTo: ItemRemoveResponse.self
+            body: EmptyBody(),
+            decodeTo: GenericSuccessResponse.self
         ) { result in
-            switch result {
-            case .success(let response):
-                completion(.success(response.removed))
-            case .failure(let error):
-                completion(.failure(error))
-            }
+            completion(result.map { $0.success })
         }
     }
     
-    // --- NEW: This function calls our secure backend endpoint ---
     /// Sends the public token to the backend to be exchanged and stored securely.
     private func exchangePublicTokenOnBackend(
         _ publicToken: String,
         completion: @escaping (Result<Bool, Error>) -> Void
     ) {
-        let body = ["public_token": publicToken]
+        // FIX: Use the new, type-safe ExchangeTokenRequest struct.
+        let requestBody = ExchangeTokenRequest(publicToken: publicToken)
         
-        // This now calls your secure /exchange_public_token endpoint
         NetworkService.postJSON(
             to: API.exchangePublicToken.url,
-            body: body,
-            decodeTo: GenericSuccessResponse.self // A simple struct for { "success": true }
+            body: requestBody,
+            decodeTo: GenericSuccessResponse.self
         ) { result in
-            switch result {
-            case .success(let response):
-                completion(.success(response.success))
-            case .failure(let err):
-                completion(.failure(err))
-            }
+            completion(result.map { $0.success })
         }
     }
 }

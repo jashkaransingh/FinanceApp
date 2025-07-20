@@ -92,20 +92,6 @@ class BudgetAssistantViewController: UIViewController {
         s.translatesAutoresizingMaskIntoConstraints = false
         return s
     }()
-    private let sliderMinLabel: UILabel = {
-        let l = UILabel()
-        l.text = "$50"
-        l.font = .systemFont(ofSize: 12)
-        l.textColor = .secondaryLabel
-        return l
-    }()
-    private let sliderMaxLabel: UILabel = {
-        let l = UILabel()
-        l.text = "$1000"
-        l.font = .systemFont(ofSize: 12)
-        l.textColor = .secondaryLabel
-        return l
-    }()
     // generate Budget Button
     private lazy var generateButton: UIButton = {
         let btn = UIButton(type: .system)
@@ -116,6 +102,27 @@ class BudgetAssistantViewController: UIViewController {
         btn.layer.cornerRadius = 8
         btn.translatesAutoresizingMaskIntoConstraints = false
         btn.addTarget(self, action: #selector(didTapGenerate), for: .touchUpInside)
+        return btn
+    }()
+    private lazy var editBudgetFAB: UIButton = {
+        let btn = UIButton(type: .system)
+        // Use an icon instead of text
+        let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .bold)
+        btn.setImage(UIImage(systemName: "applepencil.gen1", withConfiguration: config), for: .normal)
+        
+        btn.tintColor = .systemBackground
+        btn.backgroundColor = .label
+        
+        // Make it circular with a shadow
+        btn.layer.cornerRadius = 28
+        btn.layer.shadowColor = UIColor.black.cgColor
+        btn.layer.shadowRadius = 8
+        btn.layer.shadowOpacity = 0.3
+        btn.layer.shadowOffset = CGSize(width: 0, height: 4)
+        
+        btn.addTarget(self, action: #selector(didTapStartOver), for: .touchUpInside)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        btn.isHidden = true // Initially hidden
         return btn
     }()
     // “Your Spending Plan” header
@@ -193,8 +200,8 @@ class BudgetAssistantViewController: UIViewController {
             subtitleLabel,
             budgetPill,
             budgetSlider,
-            makeSliderLabels(),
             generateButton,
+            
             suggestionsHeader,
             suggestionsStack
         ].forEach { contentStack.addArrangedSubview($0) }
@@ -209,10 +216,10 @@ class BudgetAssistantViewController: UIViewController {
         activityIndicator.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(activityIndicator)
         
+        view.addSubview(editBudgetFAB)
         
         // constraints
         NSLayoutConstraint.activate([
-            // --- SCROLLER FIX: Pinning to correct guides ---
             scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -224,7 +231,6 @@ class BudgetAssistantViewController: UIViewController {
             contentStack.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor, constant: -16),
             contentStack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -32),
             
-            // The rest of your constraints for the UI elements are correct
             headerIconContainer.widthAnchor.constraint(equalToConstant: 64),
             headerIconContainer.heightAnchor.constraint(equalToConstant: 64),
             headerIcon.centerXAnchor.constraint(equalTo: headerIconContainer.centerXAnchor),
@@ -258,16 +264,17 @@ class BudgetAssistantViewController: UIViewController {
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
+        NSLayoutConstraint.activate([
+            // Make it a 56x56 point circle
+            editBudgetFAB.widthAnchor.constraint(equalToConstant: 56),
+            editBudgetFAB.heightAnchor.constraint(equalToConstant: 56),
+            
+            // Position it in the bottom-right corner
+            editBudgetFAB.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -20),
+            editBudgetFAB.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20)
+        ])
     }
     
-    private func makeSliderLabels() -> UIStackView {
-        let spacer = UIView()
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let h = UIStackView(arrangedSubviews: [sliderMinLabel, spacer, sliderMaxLabel])
-        h.axis = .horizontal
-        h.translatesAutoresizingMaskIntoConstraints = false
-        return h
-    }
     /// Transitions the UI to the initial "Generate Plan" state.
     private func transitionToInitialState() {
         // Ensure suggestion views are hidden and cleared
@@ -287,6 +294,7 @@ class BudgetAssistantViewController: UIViewController {
         budgetSlider.isHidden = false
         generateButton.alpha = 1
         generateButton.isHidden = false
+        editBudgetFAB.isHidden = true // Hide the button
         
         contentStack.alpha = 0
         contentStack.isHidden = false
@@ -304,6 +312,7 @@ class BudgetAssistantViewController: UIViewController {
         self.budgetPill.isHidden = true
         self.budgetSlider.isHidden = true
         self.generateButton.isHidden = true
+        self.editBudgetFAB.isHidden = false // Show the button
         
         // Update data
         self.currentPlanTotalBudget = totalBudget
@@ -373,6 +382,9 @@ class BudgetAssistantViewController: UIViewController {
         loadSuggestions(for: budget)
     }
     
+    @objc private func didTapStartOver() {
+        transitionToInitialState()
+    }
     
     // MARK: – Data Logic
     private func loadSavedPlan() {
@@ -456,35 +468,42 @@ class BudgetAssistantViewController: UIViewController {
     
     // Delete the old reallocateBudgets function and replace it with this one.
     private func reallocateBudgets(from changedCard: SuggestionCardView, newValue: Float) {
-        // 1. Get the current state of the plan directly from the UI cards.
-        let allCards = suggestionsStack.arrangedSubviews.compactMap { $0 as? SuggestionCardView }
-        let currentPlan = Dictionary(uniqueKeysWithValues: allCards.map {
-            ($0.titleLabel.text ?? "", ["amount": $0.currentAmount])
-        })
-        
-        guard let lockedCategory = changedCard.titleLabel.text else { return }
-        
-        // Optional: You could show a loading overlay here for better UX
-        
-        // 2. Call the DataService with the necessary info.
-        DataService.fetchAIReallocation(
-            transactions: self.originalTransactions,
-            currentPlan: currentPlan,
-            lockedCategory: lockedCategory,
-            newValue: Int(round(newValue)),
-            totalBudget: self.currentPlanTotalBudget
-        ) { [weak self] result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let newPlan):
-                    self?.updateCards(with: newPlan)
-                    self?.saveCurrentPlan(plan: newPlan, totalBudget: self?.currentPlanTotalBudget ?? 0)
-                case .failure(let error):
-                    print("❌ AI reallocation failed: \(error)")
+            // 1. Get the current state of the plan by creating a [String: PlanItem] dictionary.
+            let allCards = suggestionsStack.arrangedSubviews.compactMap { $0 as? SuggestionCardView }
+            
+            // This is the line that has been corrected.
+            // Instead of creating a simple dictionary, we now create a full PlanItem struct.
+            let currentPlan = Dictionary(uniqueKeysWithValues: allCards.map { card -> (String, PlanItem) in
+                let title = card.titleLabel.text ?? ""
+                let amount = Double(card.currentAmount)
+                let percent = Double(card.currentPercent)
+                let subtitle = card.subtitleLabel.text ?? ""
+                
+                let planItem = PlanItem(amount: amount, percent: percent, subtitle: subtitle)
+                return (title, planItem)
+            })
+            
+            guard let lockedCategory = changedCard.titleLabel.text else { return }
+            
+            // 2. Call the DataService with the correctly typed data.
+            DataService.fetchAIReallocation(
+                transactions: self.originalTransactions,
+                currentPlan: currentPlan, // This now matches the expected type
+                lockedCategory: lockedCategory,
+                newValue: Int(round(newValue)),
+                totalBudget: self.currentPlanTotalBudget
+            ) { [weak self] result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success(let newPlan):
+                        self?.updateCards(with: newPlan)
+                        self?.saveCurrentPlan(plan: newPlan, totalBudget: self?.currentPlanTotalBudget ?? 0)
+                    case .failure(let error):
+                        print("❌ AI reallocation failed: \(error)")
+                    }
                 }
             }
         }
-    }
     
     /// A small helper to save the current plan to the backend.
     private func saveCurrentPlan(plan: [String: CategoryBudget], totalBudget: Int) {

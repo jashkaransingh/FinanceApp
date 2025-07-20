@@ -7,6 +7,7 @@
 
 import UIKit
 import LinkKit
+import LocalAuthentication
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -23,9 +24,18 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             let win = UIWindow(windowScene: windowScene)
             window = win
 
-            // 2) Pull the saved dark–mode flag and apply it globally
-            let darkOn = UserDefaults.standard.bool(forKey: "darkModeEnabled")
-            win.overrideUserInterfaceStyle = darkOn ? .dark : .light
+        // 1. A new key to check if the user has ever touched the toggle.
+            let themeHasBeenSet = "userHasManuallySetTheme"
+
+            if !UserDefaults.standard.bool(forKey: themeHasBeenSet) {
+                // If the user has NEVER set a theme, sync the toggle with the system.
+                let isSystemDark = win.traitCollection.userInterfaceStyle == .dark
+                UserDefaults.standard.set(isSystemDark, forKey: "isDarkModeManuallySet")
+            }
+
+            // 2. Now apply the theme using the (now correct) stored value.
+            let isDarkModeOn = UserDefaults.standard.bool(forKey: "isDarkModeManuallySet")
+            win.overrideUserInterfaceStyle = isDarkModeOn ? .dark : .light
 
             // 3) Now decide your root view controller
             if AuthService.isSignedIn() {
@@ -37,30 +47,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             }
 
             win.makeKeyAndVisible()
-            
-            window = UIWindow(windowScene: windowScene)
-
-            if AuthService.isSignedIn() {
-                SceneDelegate.switchToMainApp()
-            } else {
-                let loginVC = LoginViewController()
-                let nav = UINavigationController(rootViewController: loginVC)
-                window?.rootViewController = nav
-            }
-
-            window?.makeKeyAndVisible()
           }
-    func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
-        PlaidService.shared.linkHandler?.open(
-          presentUsing: .viewController(UIApplication.shared.topMostViewController()!)
-        )
-    }
-
-
-
-
-
-
+//    func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
+//        PlaidService.shared.linkHandler?.open(
+//          presentUsing: .viewController(UIApplication.shared.topMostViewController()!)
+//        )
+//    }
     
     static func switchToMainApp() {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -85,19 +77,25 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         })
     }
 
-
     static func switchToLogin() {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                 let delegate = windowScene.delegate as? SceneDelegate,
-                 let window = delegate.window else { return }
+            // Ensure this UI change happens on the main thread.
+            DispatchQueue.main.async {
+                guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                      let delegate = windowScene.delegate as? SceneDelegate,
+                      let window = delegate.window else {
+                    print("Error: Could not access window to switch to login.")
+                    return
+                }
 
-           let loginVC = LoginViewController()
-           let nav = UINavigationController(rootViewController: loginVC)
+                let loginVC = LoginViewController()
+                let nav = UINavigationController(rootViewController: loginVC)
 
-           UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve, animations: {
-               window.rootViewController = nav
-           })
-    }
+                // Add a smooth transition
+                UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve, animations: {
+                    window.rootViewController = nav
+                })
+            }
+        }
 
 
     func sceneDidDisconnect(_ scene: UIScene) {
@@ -120,6 +118,23 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneWillEnterForeground(_ scene: UIScene) {
         // Called as the scene transitions from the background to the foreground.
         // Use this method to undo the changes made on entering the background.
+        // Check if App Lock is enabled
+        guard UserDefaults.standard.bool(forKey: "isAppLockEnabled") else { return }
+        
+        
+        
+        // Find the current top-most view controller to present from
+        guard let rootVC = window?.rootViewController else { return }
+        
+        // Prevent presenting if a lock screen (or any other modal) is already up
+        if rootVC.presentedViewController != nil {
+            return
+        }
+        
+        // Present the lock screen
+        let lockVC = LockViewController()
+        lockVC.modalPresentationStyle = .overFullScreen
+        rootVC.present(lockVC, animated: false) 
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {

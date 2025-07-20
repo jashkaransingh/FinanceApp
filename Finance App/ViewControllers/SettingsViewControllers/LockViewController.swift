@@ -6,24 +6,76 @@
 //
 
 import UIKit
+import LocalAuthentication
 
-class LockViewController: UIViewController {
-
+final class LockViewController: UIViewController {
+    
+    // Add a property to hold the retry button
+    private var retryButton: UIButton?
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        // Do any additional setup after loading the view.
+        // Use a blur effect to obscure the app content behind it
+        let blurEffect = UIBlurEffect(style: .systemUltraThinMaterialDark) // A modern blur style
+        let blurView = UIVisualEffectView(effect: blurEffect)
+        blurView.frame = view.bounds
+        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(blurView)
     }
     
-
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
-        // Get the new view controller using segue.destination.
-        // Pass the selected object to the new view controller.
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Trigger authentication as soon as the lock screen is visible
+        authenticateWithBiometrics()
     }
-    */
-
+    
+    private func authenticateWithBiometrics() {
+        let context = LAContext()
+        let reason = "Unlock with Face ID or Touch ID."
+        
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil) else {
+            print("Biometrics not available.")
+            // In a real app, you might show an alert here.
+            return
+        }
+        
+        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { [weak self] success, error in
+            DispatchQueue.main.async {
+                if success {
+                    // On success, dismiss the lock screen
+                    self?.dismiss(animated: true)
+                } else {
+                    // On failure, show a "Try Again" button instead of creating a loop.
+                    self?.showRetryButton()
+                }
+            }
+        }
+    }
+    
+    /// Creates and displays a button to allow the user to manually retry authentication.
+    private func showRetryButton() {
+        retryButton?.removeFromSuperview() // Remove old button if it exists
+        
+        let button = UIButton(type: .system)
+        button.setTitle("Try Again", for: .normal)
+        button.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
+        button.setTitleColor(.white, for: .normal)
+        button.addTarget(self, action: #selector(retryTapped), for: .touchUpInside)
+        
+        view.addSubview(button)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            button.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            button.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+        
+        self.retryButton = button
+    }
+    
+    /// Called when the retry button is tapped.
+    @objc private func retryTapped() {
+        retryButton?.removeFromSuperview()
+        retryButton = nil
+        authenticateWithBiometrics()
+    }
 }

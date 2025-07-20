@@ -4,425 +4,239 @@
 //
 //  Created by Jas  on 6/2/25.
 //
-
 import WidgetKit
 import SwiftUI
 
-// ------------------------------------------------
-// MARK: – THE TIMELINE ENTRY (unchanged)
-struct FinanceEntry: TimelineEntry {
-    let date: Date
-    let summaries: [SummaryEntry]
+// ─── WidgetBundle Entry Point ────────────────────────────────────────────────
+@main
+struct FinanceWidgetsBundle: WidgetBundle {
+    @WidgetBundleBuilder
+    var body: some Widget {
+        BudgetSummaryWidget()
+        BudgetRingWidget()
+    }
 }
 
-// ------------------------------------------------
-// MARK: – THE PROVIDER (unchanged)
-struct FinanceProvider: TimelineProvider {
-    func placeholder(in context: Context) -> FinanceEntry {
-        FinanceEntry(date: Date(), summaries: placeholderSummaries())
+// ─── Timeline Entry ────────────────────────────────────────────────────────────
+struct BudgetEntry: TimelineEntry {
+    let date: Date
+    let today: Double
+    let yesterday: Double
+    let weeklyBudget: Double
+}
+
+// ─── Timeline Provider ─────────────────────────────────────────────────────────
+// ─── Timeline Provider ─────────────────────────────────────────────────────────
+struct BudgetProvider: TimelineProvider {
+    // Create an instance of the data manager to read shared data.
+    private let dataManager = SharedDataManager()
+
+    // The placeholder is for the widget gallery. This is fine to be hardcoded.
+    func placeholder(in context: Context) -> BudgetEntry {
+        BudgetEntry(date: .now, today: 100, yesterday: 40, weeklyBudget: 200)
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (FinanceEntry) -> Void) {
-        completion(FinanceEntry(date: Date(), summaries: placeholderSummaries()))
+    // Snapshot tries to load real data for a more accurate preview in the gallery.
+    func getSnapshot(in context: Context, completion: @escaping (BudgetEntry) -> Void) {
+        if let sharedData = dataManager.load() {
+            let entry = BudgetEntry(date: .now, today: sharedData.today, yesterday: sharedData.yesterday, weeklyBudget: sharedData.weeklyBudget)
+            completion(entry)
+        } else {
+            // Fallback to placeholder if no data is found.
+            completion(placeholder(in: context))
+        }
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<FinanceEntry>) -> Void) {
-        let entries = loadSummaries()
-        let timeline = Timeline(entries: [FinanceEntry(date: Date(), summaries: entries)],
-                                policy: .atEnd)
+    // getTimeline provides the actual data for the live widget on your home screen.
+    func getTimeline(in context: Context, completion: @escaping (Timeline<BudgetEntry>) -> Void) {
+        let entry: BudgetEntry
+
+        // Try to load the real data from the shared container.
+        if let sharedData = dataManager.load() {
+            entry = BudgetEntry(date: .now, today: sharedData.today, yesterday: sharedData.yesterday, weeklyBudget: sharedData.weeklyBudget)
+            print("Widget timeline created with REAL data.")
+        } else {
+            // If no data exists yet (e.g., before the app runs), use placeholder data.
+            entry = placeholder(in: context)
+            print("Widget timeline created with PLACEHOLDER data.")
+        }
+
+        // Create the timeline. Use .atEnd so it waits for the main app to trigger reloads
+        // instead of updating on a fixed schedule.
+        let timeline = Timeline(entries: [entry], policy: .atEnd)
         completion(timeline)
     }
+}
 
-    private func loadSummaries() -> [SummaryEntry] {
-        let defaults = UserDefaults(suiteName: "group.com.singh.financeapp")
-        guard
-            let data = defaults?.data(forKey: "summaryData"),
-            let decoded = try? JSONDecoder().decode([SummaryEntry].self, from: data)
-        else {
-            return placeholderSummaries()
+// ─── Shared Background Helper ─────────────────────────────────────────────────
+extension View {
+    @ViewBuilder
+    func widgetBackground<Background: View>(_ backgroundView: Background) -> some View {
+        if #available(iOS 17.0, *) {
+            self
+              .containerBackground(for: .widget) {}
+              .background(backgroundView)
+        } else {
+            self.background(backgroundView)
         }
-        return decoded
-    }
-
-    private func placeholderSummaries() -> [SummaryEntry] {
-        [
-            SummaryEntry(title: "Spent Today", amount:  42.75, subtitle: "Yesterday $38.12"),
-            SummaryEntry(title: "Spent This Week", amount: 310.25, subtitle: "Last Week $298.50"),
-            SummaryEntry(title: "Spent This Month", amount: 1200.40, subtitle: "Last Month $1150.00")
-        ]
     }
 }
 
-
-// ------------------------------------------------
-// MARK: – WIDGET‐1: The Existing Spending Summary Widget
-
-struct FinanceWidgetEntryView: View {
-    @Environment(\.widgetFamily) var family
-    let entry: FinanceEntry
-
-    var body: some View {
-        Group {
-            switch family {
-            case .accessoryCircular:
-                LockScreenCircularView(latest: entry.summaries.first)
-            case .systemMedium:
-                HomeScreenMediumView(summaries: entry.summaries)
-            default:
-                HomeScreenMediumView(summaries: entry.summaries)
-            }
-        }
-        .padding()
-        .containerBackground(.clear, for: .widget)
-    }
-}
-
-struct FinanceWidget: Widget {
-    let kind: String = "FinanceWidget"
+// ─── 1) Home‐Screen small (.systemSmall) ───────────────────────────────────────
+struct BudgetSummaryWidget: Widget {
+    let kind = "BudgetSummaryWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind,
-                            provider: FinanceProvider()) { entry in
-            FinanceWidgetEntryView(entry: entry)
+        StaticConfiguration(kind: kind, provider: BudgetProvider()) { entry in
+            SignatureWidgetView(
+                today: entry.today,
+                yesterday: entry.yesterday,
+                weeklyBudget: entry.weeklyBudget
+            )
         }
-        .configurationDisplayName("Spending Summary")
-        .description("See your recent spending in a small Lock Screen circular widget or a medium Home Screen widget.")
-        .supportedFamilies([.accessoryCircular, .systemMedium])
+        .configurationDisplayName("Budget Summary")
+        .description("Today’s spend, yesterday’s spend, and weekly remaining.")
+        .supportedFamilies([.systemSmall])
     }
 }
 
-// MARK: – Existing Home Screen (Medium) View
-struct HomeScreenMediumView: View {
-    let summaries: [SummaryEntry]
+struct SignatureWidgetView: View {
+    let today: Double
+    let yesterday: Double
+    let weeklyBudget: Double
+
+    private var remaining: Double {
+        max(weeklyBudget - today, 0)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Spending Summary")
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.8))
-                .padding(.bottom, 2)
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
 
+            // Hero Number: Today's Spend
+            Text(today, format: .currency(code: "USD").precision(.fractionLength(0)))
+                .font(.system(size: 64, weight: .heavy, design: .rounded))
+                .foregroundStyle(.primary)
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+                .contentTransition(.numericText())
+
+            Spacer(minLength: 0)
+
+            // Bottom Info Blocks
+            // Bottom Info Blocks—two equal columns
             HStack(spacing: 12) {
-                if summaries.indices.contains(0) {
-                    let today = summaries[0]
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(today.title.uppercased())
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.6))
-                        Text("$\(today.amount, specifier: "%.2f")")
-                            .font(.title3).bold()
-                            .foregroundColor(.white)
-                        Text(today.subtitle)
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.6))
-                    }
-                }
+                InfoBlockView(title: "YESTERDAY", value: yesterday, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer()
-
-                if summaries.indices.contains(1) {
-                    let week = summaries[1]
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(week.title.uppercased())
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.6))
-                        Text("$\(week.amount, specifier: "%.2f")")
-                            .font(.title3).bold()
-                            .foregroundColor(.white)
-                        Text(week.subtitle)
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.6))
-                    }
-                }
+                InfoBlockView(title: "REMAINING", value: remaining, alignment: .trailing)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
+
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            Color(red: 0.10, green: 0.10, blue: 0.15),
-                            Color(red: 0.12, green: 0.12, blue: 0.18)
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .shadow(color: .purple.opacity(0.4), radius: 10, x: 0, y: 4)
-        )
-        .containerBackground(.clear, for: .widget)
+        .padding(14)
+        .widgetBackground(Color(uiColor: .systemBackground))
     }
 }
 
+struct InfoBlockView: View {
+    let title: String
+    let value: Double
+    let alignment: HorizontalAlignment
 
-// MARK: – Existing Lock Screen (Circular) View (#1)
-struct LockScreenCircularView: View {
-    let latest: SummaryEntry?
+    var body: some View {
+            VStack(alignment: alignment, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)                   // ← no wrapping
+                    .minimumScaleFactor(0.6)        // ← shrink if needed
+
+                Text(value, format: .currency(code: "USD").precision(.fractionLength(0)))
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)                   // ← no wrapping
+                    .minimumScaleFactor(0.6)        // ← shrink if needed
+            }
+            .frame(maxWidth: .infinity,
+                   alignment: alignment == .leading ? .leading : .trailing)
+        }
+}
+
+// ─── 2) Lock‐Screen accessory (.accessoryCircular) ─────────────────────────────
+struct BudgetRingWidget: Widget {
+    let kind = "BudgetRingWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: BudgetProvider()) { entry in
+            ThicknessRingView(value: entry.today)
+        }
+        .configurationDisplayName("Spending Ring")
+        .description("Lock-screen gauge of today’s spend.")
+        .supportedFamilies([.accessoryCircular])
+    }
+}
+
+struct ThicknessRingView: View {
+    /// 1) How much you’ve spent today
+    let value: Double
+    
+    /// 2) “Full-thickness” threshold — at or above this, ring is maxWidth
+    let fullThreshold: Double = 200
+    
+    /// 3) Min/max stroke widths for 0…fullThreshold
+    let minWidth: CGFloat = 1
+    let maxWidth: CGFloat = 10
+
+    /// Normalize value to 0…1
+    private var ratio: CGFloat {
+        CGFloat(min(value / fullThreshold, 1))
+    }
+    
+    /// Line width = minWidth + (maxWidth-minWidth)×ratio
+    private var lineWidth: CGFloat {
+        minWidth + (maxWidth - minWidth) * ratio
+    }
 
     var body: some View {
         ZStack {
-            // Purple → Magenta gradient circle
-            Circle()
-                .fill(
-                    LinearGradient(
-                        stops: [
-                            .init(color: Color(red: 0.55, green: 0.15, blue: 0.55), location: 0.0),
-                            .init(color: Color(red: 0.85, green: 0.25, blue: 0.65), location: 1.0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .overlay(
-                    // thin white border
-                    Circle()
-                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                )
+          // 1) Frosted-glass backdrop
+          Circle()
+            .fill(.ultraThinMaterial)        // iOS17+ only
+            .opacity(0.8)                    // slightly transparent
+            .clipShape(Circle())
 
-            // Icon + amount
-            VStack(spacing: 0) {
-                if let today = latest {
-                    Image(systemName: "dollarsign.circle.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                        .shadow(color: Color.black.opacity(0.3), radius: 1, x: 0, y: 1)
+          // 2) Your dynamic ring (same as before)
+          Circle()
+            .stroke(
+              style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+            )
+            .foregroundStyle(.primary)
 
-                    Text("\(Int(today.amount))")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
-                        .shadow(color: Color.black.opacity(0.3), radius: 1, x: 0, y: 1)
-                } else {
-                    Image(systemName: "dollarsign.circle")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color.white.opacity(0.7))
-                        .shadow(color: Color.black.opacity(0.3), radius: 1, x: 0, y: 1)
-
-                    Text("–")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(Color.white.opacity(0.7))
-                        .shadow(color: Color.black.opacity(0.3), radius: 1, x: 0, y: 1)
-                }
-            }
+          // 3) Center label
+            Text("$\(Int(value))")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
         }
-        .frame(width: 60, height: 60) // EXACTLY the Lock Screen accessory circular size
+        
+        .widgetBackground(Color.clear)
     }
 }
 
-
-// ------------------------------------------------
-// MARK: – WIDGET‐2: The New Gauge Widget
-
-struct GaugeWidgetEntryView: View {
-//    let entry: FinanceEntry
-//
-//    // Extract “today’s” amount from the first summary if it exists, else zero:
-//    var todayAmount: Double {
-//        entry.summaries.first?.amount ?? 0
-//    }
-//
-//    // Determine ring color based on thresholds:
-//    private var ringColor: Color {
-//        switch todayAmount {
-//        case _ where todayAmount > 100:
-//            return .red
-//        case 25...100:
-//            return .yellow
-//        default:
-//            return .green
-//        }
-//    }
-//
-//    // Map the numeric value into a 0…1 “progress” (cap at 200):
-//    private var progress: Double {
-//        min(todayAmount / 200.0, 1.0)
-//    }
-//
-//    var body: some View {
-//        ZStack {
-//            // 1) Gray “track” circle behind
-//            Circle()
-//                .stroke(
-//                    AngularGradient(
-//                        gradient: Gradient(colors: [ringColor, ringColor.opacity(0.6)]),
-//                        center: .center
-//                    ),
-//                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-//                )
-//
-//
-//            // 2) Colored ring “progress”
-//            Circle()
-//                .trim(from: 0, to: progress)
-//                .stroke(
-//                    ringColor.gradient, // Use gradient for vibrance
-//                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-//                )
-//                .rotationEffect(.degrees(-90)) // Start from top
-//
-//            // 3) Numeric label in center
-//            if todayAmount > 0 {
-//                Text("\(Int(todayAmount))")
-//                    .font(.system(size: 14, weight: .bold))
-//                    .foregroundColor(.white)
-//                    .shadow(color: Color.black.opacity(0.3), radius: 1, x: 0, y: 1)
-//            } else {
-//                Text("–")
-//                    .font(.system(size: 14, weight: .bold))
-//                    .foregroundColor(.white.opacity(0.7))
-//                    .shadow(color: Color.black.opacity(0.3), radius: 1, x: 0, y: 1)
-//            }
-//        }
-//        .padding(8) // so that the ring is not clipped at the edges
-//        .background(
-//            // dark background so white text/ring pops:
-//            Circle().fill(Color(UIColor.systemGray6))
-//        )
-//        .frame(width: 60, height: 60) // EXACTLYLock Screen circular size
-//        .containerBackground(.clear, for: .widget)
-//
-//    }
-    let entry: FinanceEntry
-
-        var todayAmount: Double {
-            entry.summaries.first?.amount ?? 0
-        }
-
-        /// This is the main view property. It uses a ViewBuilder to return
-        /// a different style of Gauge depending on the user's spending.
-        @ViewBuilder
-        private var styledGauge: some View {
-            switch todayAmount {
-            case _ where todayAmount > 100:
-                // "Danger" state: A speedometer dial with an explicit warning icon.
-                Gauge(value: todayAmount, in: 0...200) {
-                    // **THE FIX:** Use an empty Text view for the primary label to prevent overflow.
-                    Text("")
-                } currentValueLabel: {
-                    // Combine an icon and text for a clear danger signal.
-                    HStack(spacing: 2) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                        Text("$\(Int(todayAmount))")
-                    }
-                }
-                .gaugeStyle(.accessoryCircular) // The dial style.
-
-            case 25...100:
-                // "Warning" state: A solid filled circle. This is visually very distinct.
-                // The system will render the white circle correctly on the Lock Screen.
-                ZStack {
-                    Circle().fill(Color.white)
-                    Text("$\(Int(todayAmount))")
-                        .font(.title3.bold())
-                        .foregroundColor(.black) // Text must be black to be visible on the white circle.
-                }
-
-            default:
-                // "Good" state: The most minimal style, a simple dial with just a needle.
-                Gauge(value: todayAmount, in: 0...200) {
-                    // **THE FIX:** Use an empty Text view for the primary label to prevent overflow.
-                    Text("")
-                } currentValueLabel: {
-                    Text("$\(Int(todayAmount))")
-                }
-                .gaugeStyle(.accessoryCircular) // The dial style.
-            }
-        }
-
-        var body: some View {
-            styledGauge
-                .containerBackground(.clear, for: .widget)
-        }
-}
-
-struct GaugeWidget: Widget {
-    let kind: String = "GaugeWidget"
-
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind,
-                            provider: FinanceProvider()) { entry in
-            GaugeWidgetEntryView(entry: entry)
-        }
-        .configurationDisplayName("Today’s Spending Gauge")
-        .description("A quick glance at how much you’ve spent today (green/yellow/red).")
-        .supportedFamilies([.accessoryCircular]) // this widget is circular‐only
-    }
-}
-
-
-// ------------------------------------------------
-// MARK: – WIDGET BUNDLE
-
-
-
-
-// ------------------------------------------------
-// MARK: – PREVIEWS (for both widgets)
-
+// ─── Previews ─────────────────────────────────────────────────────────────────
 #if DEBUG
-struct FinanceWidget_Previews: PreviewProvider {
+struct BudgetWidgets_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            // Preview the Spending Summary (Medium + Circular):
-            FinanceWidgetEntryView(
-                entry: FinanceEntry(
-                    date: Date(),
-                    summaries: [
-                        SummaryEntry(title: "Spent Today", amount: 50.0, subtitle: "Yesterday $45.00"),
-                        SummaryEntry(title: "Spent This Week", amount: 300.0, subtitle: "Last Week $280.00")
-                    ]
-                )
-            )
-            .previewContext(WidgetPreviewContext(family: .systemMedium))
+            SignatureWidgetView(today: 72, yesterday: 65, weeklyBudget: 200)
+                .previewContext(WidgetPreviewContext(family: .systemSmall))
+                .previewDisplayName("Home • Small")
 
-            FinanceWidgetEntryView(
-                entry: FinanceEntry(
-                    date: Date(),
-                    summaries: [
-                        SummaryEntry(title: "Spent Today", amount: 75.0, subtitle: "Yesterday $65.00")
-                    ]
-                )
-            )
-            .previewContext(WidgetPreviewContext(family: .accessoryCircular))
-
-            // Preview the new Gauge widget with various values:
-            GaugeWidgetEntryView(
-                entry: FinanceEntry(
-                    date: Date(),
-                    summaries: [
-                        SummaryEntry(title: "Spent Today", amount: 10.0, subtitle: "…")
-                    ]
-                )
-            )
-            .previewContext(WidgetPreviewContext(family: .accessoryCircular))
-            .previewDisplayName("Gauge – Green (<25)")
-
-            GaugeWidgetEntryView(
-                entry: FinanceEntry(
-                    date: Date(),
-                    summaries: [
-                        SummaryEntry(title: "Spent Today", amount: 60.0, subtitle: "…")
-                    ]
-                )
-            )
-            .previewContext(WidgetPreviewContext(family: .accessoryCircular))
-            .previewDisplayName("Gauge – Yellow (25≤amt≤100)")
-
-            GaugeWidgetEntryView(
-                entry: FinanceEntry(
-                    date: Date(),
-                    summaries: [
-                        SummaryEntry(title: "Spent Today", amount: 150.0, subtitle: "…")
-                    ]
-                )
-            )
-            .previewContext(WidgetPreviewContext(family: .accessoryCircular))
-            .previewDisplayName("Gauge – Red (>100)")
+            ThicknessRingView(value: 72)
+                .previewContext(WidgetPreviewContext(family: .accessoryCircular))
+                .previewDisplayName("Lock • Circular")
         }
     }
 }
 #endif
-
 
 

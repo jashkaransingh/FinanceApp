@@ -18,7 +18,7 @@ final class SuggestionCardView: UIView {
     var currentAmount: Int {
         return Int(round(budgetSlider.value))
     }
-    
+    var currentPercent: Int = 0
     // MARK: - UI Elements
     // UI elements are made internal (the default) so the view controller can read their values if needed.
     let titleLabel = UILabel()
@@ -27,7 +27,7 @@ final class SuggestionCardView: UIView {
     let budgetSlider = UISlider()
     
     private let iconView = UIImageView()
-    private let subtitleLabel = UILabel()
+     let subtitleLabel = UILabel()
     
     // MARK: - Initializers
     
@@ -60,6 +60,8 @@ final class SuggestionCardView: UIView {
         
         // Set the slider's value based on the configured amount.
         budgetSlider.value = Float(amount)
+        
+        currentPercent = percent
         
         // Assign an appropriate icon based on the category title.
         iconView.image = icon(for: title)

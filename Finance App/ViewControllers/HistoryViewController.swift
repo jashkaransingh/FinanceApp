@@ -21,6 +21,7 @@ class HistoryViewController: UIViewController {
     private var sortedMonthKeys: [Date] = []
     private var monthTotals: [Date: Double] = [:]
     private var isLoading = false
+    private let refreshControl = UIRefreshControl()
     
     // MARK: – Formatters
     private static let isoDateFormatter: DateFormatter = {
@@ -45,11 +46,17 @@ class HistoryViewController: UIViewController {
         navigationItem.title = "History"
         configureNavigationBar()
         configureTableView()
+        
+        refreshControl.addTarget(self, action: #selector(refreshData), for: .valueChanged)
+        tableView.addSubview(refreshControl) // Use addSubview for a non-UITableViewController
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        fetchData()
+        if allTransactions.isEmpty {
+            showLoadingState()
+            fetchData()
+        }
     }
     
     // MARK: – Configuration
@@ -59,8 +66,8 @@ class HistoryViewController: UIViewController {
     }
     
     private func configureTableView() {
-        // ... (This function remains identical to your original, no changes needed)
         tableView.register(ModernTransactionCell.self, forCellReuseIdentifier: ModernTransactionCell.reuseID)
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "SkeletonCell")
         tableView.dataSource = self
         tableView.delegate = self
         tableView.backgroundColor = .clear
@@ -83,8 +90,14 @@ class HistoryViewController: UIViewController {
     
     // MARK: – Data Fetch
     
+    @objc private func refreshData() {
+        showLoadingState()
+        fetchData()
+    }
+    
     private func fetchData() {
-        // First, check if the user has a bank connected at all.
+        placeholderLabel?.removeFromSuperview() // Clear any old placeholder
+        
         guard let uid = Auth.auth().currentUser?.uid else {
             showPlaceholder(message: "Please sign in to view history.")
             return
@@ -105,35 +118,37 @@ class HistoryViewController: UIViewController {
             }
         }
     }
-
+    
     private func fetchLastYearTransactions() {
-        isLoading = true
-        tableView.reloadData() // Show shimmer cells
-        
         let today = Date()
         guard let oneYearAgo = Calendar.current.date(byAdding: .year, value: -1, to: today) else {
             return
         }
         
-        let endDateString = HistoryViewController.isoDateFormatter.string(from: today)
-        let startDateString = HistoryViewController.isoDateFormatter.string(from: oneYearAgo)
+        let endDateString = Self.isoDateFormatter.string(from: today)
+        let startDateString = Self.isoDateFormatter.string(from: oneYearAgo)
         
-        // Call our new, secure DataService function
         DataService.loadTransactions(startDate: startDateString, endDate: endDateString) { [weak self] result in
             guard let self = self else { return }
+            self.isLoading = false
+            self.refreshControl.endRefreshing()
             
             switch result {
             case .success(let transactions):
                 self.allTransactions = transactions
                 self.groupTransactionsByMonth()
+                if transactions.isEmpty {
+                    self.showPlaceholder(message: "No transactions found for the last year.")
+                }
             case .failure(let error):
                 print("❌ Failed to fetch transactions:", error)
                 self.allTransactions = []
-                self.groupTransactionsByMonth() // Clear out old data on failure
+                self.groupTransactionsByMonth()
+                self.showPlaceholder(message: "Could not load transactions.")
             }
             
-            self.isLoading = false
-            self.tableView.reloadData() // Display real data or empty state
+            // Now reload the table with either the real data or the empty state.
+            self.tableView.reloadData()
         }
     }
     
@@ -164,7 +179,19 @@ class HistoryViewController: UIViewController {
         sortedMonthKeys = transactionsByMonth.keys.sorted { $0 > $1 }
     }
     
-    // MARK: – Placeholder
+    // MARK: – State Management
+    
+    /// Puts the UI into a loading state, showing shimmer cells.
+    private func showLoadingState() {
+        isLoading = true
+        placeholderLabel?.removeFromSuperview()
+        // Clear old data before showing loading cells
+        allTransactions.removeAll()
+        transactionsByMonth.removeAll()
+        sortedMonthKeys.removeAll()
+        tableView.reloadData()
+    }
+    
     private func showPlaceholder(message: String) {
         // Clear existing state
         self.isLoading = false
@@ -196,7 +223,7 @@ class HistoryViewController: UIViewController {
 // almost identical to your original. The only change is using `isLoading`
 // instead of `isLoadingTransactions`. No other changes are needed here.
 extension HistoryViewController: UITableViewDataSource {
-
+    
     func numberOfSections(in tableView: UITableView) -> Int {
         return isLoading ? 1 : sortedMonthKeys.count
     }
@@ -214,8 +241,7 @@ extension HistoryViewController: UITableViewDataSource {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         if isLoading {
             // ... (shimmer cell logic is unchanged)
-            let cellID = "SkeletonCell"
-            let cell = tableView.dequeueReusableCell(withIdentifier: cellID) ?? UITableViewCell(style: .default, reuseIdentifier: cellID)
+            let cell = tableView.dequeueReusableCell(withIdentifier: "SkeletonCell", for: indexPath)
             cell.contentView.subviews.forEach { $0.removeFromSuperview() }
             let shimmer = ShimmerView()
             shimmer.translatesAutoresizingMaskIntoConstraints = false
@@ -264,8 +290,10 @@ extension HistoryViewController: UITableViewDataSource {
 }
 
 extension HistoryViewController: UITableViewDelegate {
-    // ... (This entire extension remains identical to your original)
+    
     func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+        guard !isLoading else { return }
+        
         cell.alpha = 0
         cell.transform = CGAffineTransform(translationX: 0, y: 20)
         UIView.animate(withDuration: 0.4, delay: 0.05 * Double(indexPath.row), options: [.curveEaseOut], animations: {
@@ -282,8 +310,16 @@ extension HistoryViewController: UITableViewDelegate {
         return header
     }
     
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        if isLoading {
+            return 60 // A fixed height for shimmer cells.
+        }
+        // Let real cells use automatic height.
+        return UITableView.automaticDimension
+    }
+    
     func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
-        return 50
+        return isLoading ? 0 : 50
     }
     
     func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {

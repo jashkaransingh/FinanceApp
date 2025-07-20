@@ -12,7 +12,17 @@
 				<string>com.teamcode.Finance-App</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.103700710348-r0ic9cgjjkudntpftepkd942r7tjuue2</string>
+			</array>
+		</dict>
 	</array>
+	<key>GIDClientID</key>
+	<string>103700710348-r0ic9cgjjkudntpftepkd942r7tjuue2.apps.googleusercontent.com</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>plaid</string>

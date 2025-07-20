@@ -16,7 +16,7 @@ class AccountDetailViewController: UIViewController {
     private var transactions: [Transaction] = []
     private var isLoading = true
     
-    private let isoDateFormatter: DateFormatter = {
+    private static let isoDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         f.locale     = Locale(identifier: "en_US_POSIX")
@@ -74,38 +74,38 @@ class AccountDetailViewController: UIViewController {
     /// Computes date range, fetches transactions, and reloads the table.
     private func loadTransactions() {
         guard let per = period else {
-                    // Handle case where period is not set, maybe show an error
-                    print("Error: AccountDetailViewController requires a period to be set.")
-                    self.isLoading = false
-                    self.tableView.reloadData()
-                    return
-                }
+            // Handle case where period is not set, maybe show an error
+            print("Error: AccountDetailViewController requires a period to be set.")
+            self.isLoading = false
+            self.tableView.reloadData()
+            return
+        }
         
         isLoading = true
         tableView.reloadData()
         
         let (start, end) = dateRange(for: per)
-        let startStr = isoDateFormatter.string(from: start)
-        let endStr   = isoDateFormatter.string(from: end)
+        let startStr = AccountDetailViewController.isoDateFormatter.string(from: start)
+        let endStr   = AccountDetailViewController.isoDateFormatter.string(from: end)
         
         // Call the new, secure DataService function. No access token needed.
-                DataService.loadTransactions(startDate: startStr, endDate: endStr) { [weak self] result in
-                    guard let self = self else { return }
-                    
-                    // Give a little delay for a smoother UI feel with the shimmer.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        self.isLoading = false
-                        switch result {
-                        case .success(let transactions):
-                            self.transactions = transactions
-                        case .failure(let error):
-                            print("❌ Failed to load detail transactions:", error)
-                            self.transactions = [] // Clear data on failure
-                        }
-                        self.tableView.reloadData()
-                    }
+        DataService.loadTransactions(startDate: startStr, endDate: endStr) { [weak self] result in
+            guard let self = self else { return }
+            
+            // Give a little delay for a smoother UI feel with the shimmer.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self.isLoading = false
+                switch result {
+                case .success(let transactions):
+                    self.transactions = transactions
+                case .failure(let error):
+                    print("❌ Failed to load detail transactions:", error)
+                    self.transactions = [] // Clear data on failure
                 }
+                self.tableView.reloadData()
             }
+        }
+    }
     
     /// Returns start and end `Date` for the given period.
     private func dateRange(for period: String) -> (Date, Date) {
@@ -183,6 +183,14 @@ extension AccountDetailViewController: UITableViewDataSource {
 // MARK: – UITableViewDelegate
 
 extension AccountDetailViewController: UITableViewDelegate {
+    
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        if isLoading {
+            return 60 // Provide a fixed height for the skeleton cells
+        }
+        // Let the real cells determine their own height if they have proper constraints
+        return UITableView.automaticDimension
+    }
     
     func tableView(
         _ tableView: UITableView,

@@ -9,8 +9,7 @@ from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchan
 from firebase_admin import auth, firestore
 import traceback
 from plaid.model.item_remove_request import ItemRemoveRequest
-from firebase_admin import auth, firestore
-import traceback
+import config # Import your config file
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -37,6 +36,7 @@ def create_link_token():
             products=[Products("transactions")],
             country_codes=[CountryCode("US")],
             language="en",
+            redirect_uri=config.PLAID_REDIRECT_URI # <-- ADD THIS LINE
         )
         
         # 3. Make the request to Plaid and return the link_token to the client.

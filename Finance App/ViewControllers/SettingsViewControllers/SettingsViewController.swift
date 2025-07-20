@@ -6,239 +6,187 @@
 //
 
 import UIKit
+import LocalAuthentication
+import FirebaseAuth
 
 class SettingsViewController: UITableViewController {
     
-    // MARK: – Sections
-    private enum Section: Int, CaseIterable {
-        case account, preferences, about
-        var title: String {
-            switch self {
-            case .account:     return "Account"
-            case .preferences: return "Preferences"
-            case .about:       return "About"
+    // MARK: - Properties
+    
+    private var sections = [SettingsSection: [SettingsRow]]()
+    
+    // MARK: - Lifecycle
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Settings"
+        navigationController?.navigationBar.prefersLargeTitles = true
+        
+        configureDataSource()
+        configureTableView()
+    }
+    
+    // MARK: - Configuration
+    
+    private func configureTableView() {
+        // Register the custom cell
+        tableView.register(SettingsCell.self, forCellReuseIdentifier: SettingsCell.reuseIdentifier)
+    }
+    
+    override init(style: UITableView.Style) {
+        // Set the desired style for the UITableViewController
+        super.init(style: .insetGrouped)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    /// Populates the data source that drives the table view.
+    private func configureDataSource() {
+        let userEmail = Auth.auth().currentUser?.email ?? "Your Account"
+        
+        sections[.account] = [
+            SettingsRow(type: .info, title: userEmail, icon: UIImage(systemName: "person.crop.circle"), iconBackgroundColor: .systemGray, detailText: nil),
+            SettingsRow(type: .standard, title: "Change Password", icon: UIImage(systemName: "key.fill"), iconBackgroundColor: .systemBlue, action: { [weak self] in
+                self?.navigate(to: ChangePasswordViewController())
+            }),
+            SettingsRow(type: .standard, title: "Linked Accounts", icon: UIImage(systemName: "link"), iconBackgroundColor: .systemBlue, action: { [weak self] in
+                self?.navigate(to: LinkedAccountsViewController())
+            }),
+            SettingsRow(type: .standard, title: "Delete Account", icon: UIImage(systemName: "trash.fill"), iconBackgroundColor: .systemRed, action: { [weak self] in
+                self?.navigate(to: DeleteAccountViewController())
+            })
+        ]
+        
+        sections[.preferences] = [
+            SettingsRow(type: .withSwitch, title: "App Lock", icon: UIImage(systemName: "faceid"), iconBackgroundColor: .systemGreen, action: { [weak self] in
+                self?.handleAppLockToggle()
+            }, userDefaultsKey: "isAppLockEnabled"),
+            SettingsRow(type: .standard, title: "Notifications", icon: UIImage(systemName: "bell.badge.fill"), iconBackgroundColor: .systemRed, action: { [weak self] in
+                self?.navigate(to: NotificationsSettingsViewController(style: .insetGrouped))
+            }),
+            SettingsRow(type: .withSwitch, title: "Dark Mode", icon: UIImage(systemName: "moon.fill"), iconBackgroundColor: .systemIndigo, action: { [weak self] in
+                self?.handleDarkModeToggle()
+            }, userDefaultsKey: "isDarkModeManuallySet")
+        ]
+        
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "N/A"
+        sections[.about] = [
+            SettingsRow(type: .info, title: "Version", icon: UIImage(systemName: "info.circle.fill"), iconBackgroundColor: .systemTeal, detailText: version),
+            SettingsRow(type: .standard, title: "Terms of Service", icon: UIImage(systemName: "doc.text.fill"), iconBackgroundColor: .systemGray, action: {
+                // Present a web view
+            }),
+            SettingsRow(type: .standard, title: "Privacy Policy", icon: UIImage(systemName: "hand.raised.fill"), iconBackgroundColor: .systemGray, action: {
+                // Present a web view
+            })
+        ]
+        
+        sections[.signOut] = [
+            SettingsRow(type: .destructive, title: "Sign Out", icon: nil, iconBackgroundColor: .clear, action: { [weak self] in
+                self?.signOutTapped()
+            })
+        ]
+    }
+    
+    // MARK: - Actions
+    
+    private func handleAppLockToggle() {
+        let isEnabled = UserDefaults.standard.bool(forKey: "isAppLockEnabled")
+        if !isEnabled { return } // Only prompt when turning it ON
+        
+        let context = LAContext()
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil) else {
+            // Device doesn't support biometrics. Show an alert.
+            showAlert(title: "Unsupported", message: "This device does not support Face ID or Touch ID.")
+            UserDefaults.standard.set(false, forKey: "isAppLockEnabled")
+            tableView.reloadData()
+            return
+        }
+        
+        context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "Authenticate to enable App Lock.") { [weak self] success, _ in
+            DispatchQueue.main.async {
+                if !success {
+                    UserDefaults.standard.set(false, forKey: "isAppLockEnabled")
+                    self?.tableView.reloadData()
+                }
             }
         }
     }
     
-    // MARK: – UI Elements
-    /// Button to trigger a test notification.
-    private let triggerNotifButton: UIButton = {
-        let btn = UIButton(type: .system)
-        btn.setTitle("Trigger Test Notification", for: .normal)
-        btn.titleLabel?.font = .systemFont(ofSize: 16, weight: .medium)
-        btn.translatesAutoresizingMaskIntoConstraints = false
-        return btn
-    }()
-    
-    // MARK: – Lifecycle
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        title = "Settings"
-        configureTableView()
-        configureFooterView()
+    private func handleDarkModeToggle() {
+        // The SettingsCell's switch should be responsible for saving the new value
+        // to UserDefaults using the "isDarkModeManuallySet" key.
         
-        configureTriggerButton()
-        
+        // This action closure then just reads that new value and applies the theme.
+        let isDarkMode = UserDefaults.standard.bool(forKey: "isDarkModeManuallySet")
+        view.window?.overrideUserInterfaceStyle = isDarkMode ? .dark : .light
     }
     
-    // MARK: – UI Configuration
-    
-    /// Sets up the table’s style and registers cells.
-    private func configureTableView() {
-        tableView = UITableView(frame: .zero, style: .insetGrouped)
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "DefaultCell")
-    }
-    
-    private func configureFooterView() {
-        let footer = UIView(frame: .init(x: 0, y: 0, width: view.bounds.width, height: 80))
-        footer.backgroundColor = .clear
-        
-        let card = UIView()
-        card.backgroundColor = .secondarySystemGroupedBackground
-        card.layer.cornerRadius = 12
-        card.translatesAutoresizingMaskIntoConstraints = false
-        footer.addSubview(card)
-        
-        NSLayoutConstraint.activate([
-            card.topAnchor.constraint(equalTo: footer.topAnchor, constant: 16),
-            card.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 16),
-            card.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -16),
-            card.bottomAnchor.constraint(equalTo: footer.bottomAnchor, constant: -16)
-        ])
-        
-        let signOutBtn = makeSignOutButton()
-        card.addSubview(signOutBtn)
-        NSLayoutConstraint.activate([
-            signOutBtn.centerXAnchor.constraint(equalTo: card.centerXAnchor),
-            signOutBtn.centerYAnchor.constraint(equalTo: card.centerYAnchor)
-        ])
-        
-        tableView.tableFooterView = footer
-    }
-    
-    /// Creates the red “Sign Out” button.
-    private func makeSignOutButton() -> UIButton {
-        let btn = UIButton(type: .system)
-        btn.setTitle("Sign Out", for: .normal)
-        btn.setTitleColor(.red, for: .normal)
-        btn.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
-        btn.addTarget(self, action: #selector(signOutTapped), for: .touchUpInside)
-        btn.translatesAutoresizingMaskIntoConstraints = false
-        return btn
-    }
-    
-    
-    private func configureTriggerButton() {/// Places the “Trigger Test Notification” button at bottom of view.
-        view.addSubview(triggerNotifButton)
-        NSLayoutConstraint.activate([
-            triggerNotifButton.centerXAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.centerXAnchor),
-            triggerNotifButton.bottomAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.bottomAnchor,
-                constant: -32)
-        ])
-        triggerNotifButton.addTarget(self,
-                                     action: #selector(didTapTriggerNotification),
-                                     for: .touchUpInside)
-    }
-    
-    
-    
-    // MARK: – Table DataSource
-    
-    override func numberOfSections(in tableView: UITableView) -> Int {
-        Section.allCases.count
-    }
-    
-    override func tableView(_ tv: UITableView, titleForHeaderInSection section: Int) -> String? {
-        Section(rawValue: section)?.title
-    }
-    
-    override func tableView(_ tv: UITableView, numberOfRowsInSection section: Int) -> Int {
-        switch Section(rawValue: section)! {
-        case .account:     return 1      // Linked Accounts
-        case .preferences: return 2      // Notifications, Dark Mode
-        case .about:       return 2      // Version, Help & Feedback
-        }
-    }
-    
-    override func tableView(
-        _ tv: UITableView,
-        cellForRowAt indexPath: IndexPath
-    ) -> UITableViewCell {
-        let section = Section(rawValue: indexPath.section)!
-        
-        // Version cell in About section
-        if section == .about && indexPath.row == 0 {
-            return makeVersionCell()
-        }
-        
-        let cell = tv.dequeueReusableCell(
-            withIdentifier: "DefaultCell",
-            for: indexPath
-        )
-        cell.accessoryView = nil
-        cell.accessoryType = .disclosureIndicator
-        cell.selectionStyle = .default
-        
-        switch (section, indexPath.row) {
-        case (.account, 0):
-            cell.textLabel?.text = "Linked Accounts"
-            
-        case (.preferences, 0):
-            cell.textLabel?.text = "Notifications"
-            
-        case (.preferences, 1):
-            cell.textLabel?.text = "Dark Mode"
-            let toggle = makeDarkModeToggle()
-            cell.accessoryView = toggle
-            cell.accessoryType = .none
-            
-        case (.about, 1):
-            cell.textLabel?.text = "Help & Feedback"
-            
-        default:
-            break
-        }
-        
-        return cell
-    }
-    
-    /// Creates the Version cell (non-selectable).
-    private func makeVersionCell() -> UITableViewCell {
-        let cell = UITableViewCell(style: .value1, reuseIdentifier: nil)
-        cell.textLabel?.text = "Version"
-        cell.detailTextLabel?.text = Bundle.main
-            .infoDictionary?["CFBundleShortVersionString"] as? String
-        cell.selectionStyle = .none
-        return cell
-    }
-    
-    /// Creates the Dark Mode UISwitch.
-    private func makeDarkModeToggle() -> UISwitch {
-        let toggle = UISwitch()
-        toggle.isOn = UserDefaults.standard.bool(forKey: "darkModeEnabled")
-        toggle.addTarget(self, action: #selector(didToggleDarkMode(_:)), for: .valueChanged)
-        return toggle
-    }
-    
-    // MARK: – Delegate
-    
-    override func tableView(_ tv: UITableView,
-                            didSelectRowAt ip: IndexPath)
-    {
-        tv.deselectRow(at: ip, animated: true)
-        let section = Section(rawValue: ip.section)!
-        
-        switch (section, ip.row) {
-        case (.account, 0):
-            let vc = LinkedAccountsViewController()
-            navigationController?.pushViewController(vc, animated: true)
-            
-        case (.preferences, 0):
-            let vc = NotificationsSettingsViewController()
-            navigationController?.pushViewController(vc, animated: true)
-            
-        case (.about, 1):
-            let vc = HelpFeedbackViewController()
-            navigationController?.pushViewController(vc, animated: true)
-            
-        default:
-            break   // Version row and Dark Mode toggle are not “push” actions
-        }
-    }
-    
-    // MARK: – Actions
-    
-    @objc private func didToggleDarkMode(_ sender: UISwitch) {
-        UserDefaults.standard.set(sender.isOn,
-                                  forKey: "darkModeEnabled")
-        // apply globally immediately
-        if let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first
-        {
-            scene.windows.first?.overrideUserInterfaceStyle =
-            sender.isOn ? .dark : .light
-        }
-    }
-    
-    @objc private func signOutTapped() {
-        let alert = UIAlertController(
-            title: "Sign Out?",
-            message: nil,
-            preferredStyle: .alert
-        )
+    private func signOutTapped() {
+        let alert = UIAlertController(title: "Sign Out?", message: "You will be returned to the login screen.", preferredStyle: .actionSheet)
         alert.addAction(.init(title: "Cancel", style: .cancel))
         alert.addAction(.init(title: "Sign Out", style: .destructive) { _ in
+            // Use your existing sign out logic
             AuthService.signOut()
             SceneDelegate.switchToLogin()
+            print("Signing out...")
         })
         present(alert, animated: true)
     }
-    @objc private func didTapTriggerNotification() {
-        // fire a notification 10 seconds from now
-        NotificationService.shared.scheduleSummaryNotification(after: 10)
+    
+    private func navigate(to viewController: UIViewController) {
+        navigationController?.pushViewController(viewController, animated: true)
+    }
+    
+    private func showAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
+}
+
+// MARK: - TableView DataSource & Delegate
+extension SettingsViewController {
+    
+    override func numberOfSections(in tableView: UITableView) -> Int {
+        return SettingsSection.allCases.count
+    }
+    
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        guard let sectionType = SettingsSection(rawValue: section) else { return 0 }
+        return sections[sectionType]?.count ?? 0
+    }
+    
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        return SettingsSection(rawValue: section)?.title
+    }
+    
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: SettingsCell.reuseIdentifier, for: indexPath) as? SettingsCell else {
+            fatalError("Could not dequeue SettingsCell")
+        }
+        guard let sectionType = SettingsSection(rawValue: indexPath.section),
+              let rowModel = sections[sectionType]?[indexPath.row] else {
+            return cell
+        }
+        
+        cell.configure(with: rowModel)
+        if rowModel.type == .destructive {
+            cell.textLabel?.textAlignment = .center
+        }
+        return cell
+    }
+    
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        guard let sectionType = SettingsSection(rawValue: indexPath.section),
+              let rowModel = sections[sectionType]?[indexPath.row] else {
+            return
+        }
+        
+        // Execute the action associated with the row
+        rowModel.action?()
     }
 }
 
