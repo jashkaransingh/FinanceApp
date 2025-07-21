@@ -49,36 +49,33 @@ struct SaveBudgetPlanRequest: Encodable {
 
 /// Encapsulates all authenticated network calls to your backend.
 class DataService {
-
+    
     /// Fetches account summaries for the main dashboard.
-    static func loadSummaries(completion: @escaping (Result<[AccountSummary], Error>) -> Void) {
-        // REFACTORED: Use .map for a cleaner completion handler.
+    static func loadSummaries(completion: @escaping (Result<[AccountSummary], NetworkError>) -> Void) { // <-- UPDATED
         NetworkService.getJSON(from: API.summaries.url, decodeTo: SummariesResponse.self) { result in
             completion(result.map { $0.summaries })
         }
     }
-
+    
     /// Fetches transactions for a given period.
     static func loadTransactions(
         startDate: String,
         endDate: String,
-        completion: @escaping (Result<[Transaction], Error>) -> Void
+        completion: @escaping (Result<[Transaction], NetworkError>) -> Void // <-- UPDATED
     ) {
         let queries = ["start_date": startDate, "end_date": endDate]
         
-        // REFACTORED: Removed widget update logic (side effect). This service's only job is to fetch data.
         NetworkService.getJSON(from: API.transactions.url, queries: queries, decodeTo: TransactionsResponse.self) { result in
             completion(result.map { $0.transactions })
         }
     }
-
+    
     /// Fetches an AI-generated spending plan.
     static func fetchAISuggestion(
         transactions: [Transaction],
         budget: Int,
-        completion: @escaping (Result<[String: CategoryBudget], Error>) -> Void
+        completion: @escaping (Result<[String: CategoryBudget], NetworkError>) -> Void // <-- UPDATED
     ) {
-        // REFACTORED: Use a type-safe, Encodable struct for the request body.
         let requestBody = AISuggestionRequest(transactions: transactions, weeklyBudget: budget)
         
         NetworkService.postJSON(to: API.aiSummary.url, body: requestBody, decodeTo: AISuggestionResponse.self) { result in
@@ -93,7 +90,7 @@ class DataService {
         lockedCategory: String,
         newValue: Int,
         totalBudget: Int,
-        completion: @escaping (Result<[String: CategoryBudget], Error>) -> Void
+        completion: @escaping (Result<[String: CategoryBudget], NetworkError>) -> Void // <-- UPDATED
     ) {
         let requestBody = AIReallocationRequest(
             transactions: transactions,
@@ -121,6 +118,7 @@ class DataService {
             case .success(let response):
                 completion(response.success)
             case .failure(let error):
+                // This function doesn't pass the error up, so it's fine as is.
                 print("❌ Failed to save budget plan:", error)
                 completion(false)
             }
@@ -128,7 +126,7 @@ class DataService {
     }
     
     /// Loads an existing budget plan from the backend.
-    static func loadBudgetPlan(completion: @escaping (Result<LoadBudgetResponse, Error>) -> Void) {
+    static func loadBudgetPlan(completion: @escaping (Result<LoadBudgetResponse, NetworkError>) -> Void) { // <-- UPDATED
         NetworkService.getJSON(from: API.budget.url, decodeTo: LoadBudgetResponse.self, completion: completion)
     }
 }

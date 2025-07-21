@@ -80,6 +80,12 @@ final class LinkedAccountsViewController: UIViewController {
         ])
     }
     
+    private func presentAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        self.present(alert, animated: true)
+    }
+    
     /// Updates the visibility of UI elements based on whether an account is linked.
     private func updateUIForLinkStatus() {
         // Determine which view to show and which to hide
@@ -131,17 +137,31 @@ final class LinkedAccountsViewController: UIViewController {
     // MARK: – Actions
     
     private func unlinkAccount() {
+        // Show a loading indicator here if you have one
         PlaidService.shared.unlinkAccount { [weak self] result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success:
-                    // We no longer need to manually update the UI here.
-                    // The Firestore listener will detect the change and do it for us.
-                    print("Unlink successful. Firestore listener will update UI.")
-                    self?.notifyHomeToRefresh()
-                case .failure(let error):
-                    print("Failed to unlink Plaid item: \(error)")
-                    // Show an alert to the user
+            // Hide loading indicator
+            guard let self = self else { return }
+            
+            switch result {
+            case .success:
+                // This part remains the same. The Firestore listener will handle the UI update.
+                print("Unlink successful. Firestore listener will update UI.")
+                
+            case .failure(let error):
+                // This is the new, powerful error handling.
+                switch error {
+                case .sessionExpired:
+                    // The user's token is invalid. Force them to log in again.
+                    print("Session expired. Forcing user to re-login.")
+                    SceneDelegate.switchToLogin() // Use your existing function!
+                    
+                case .serverError(let message):
+                    // A specific error from your server or the network.
+                    self.presentAlert(title: "Server Error", message: message)
+                    
+                default:
+                    // A generic error for other cases.
+                    self.presentAlert(title: "Error", message: "An unexpected error occurred. Please try again.")
                 }
             }
         }

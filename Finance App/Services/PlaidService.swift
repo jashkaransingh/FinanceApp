@@ -22,7 +22,7 @@ final class PlaidService {
     func startPlaidLink(
         from viewController: UIViewController,
         onSuccess: @escaping () -> Void,
-        onError: @escaping (Error) -> Void
+        onError: @escaping (NetworkError) -> Void
     ) {
         // FIX: Use the new, type-safe EmptyBody struct for requests with no body.
         NetworkService.postJSON(
@@ -49,7 +49,7 @@ final class PlaidService {
         token: String,
         from viewController: UIViewController,
         onSuccess: @escaping () -> Void,
-        onError: @escaping (Error) -> Void
+        onError: @escaping (NetworkError) -> Void
     ) {
         var config = LinkTokenConfiguration(token: token) { linkSuccess in
             self.exchangePublicTokenOnBackend(linkSuccess.publicToken) { result in
@@ -64,13 +64,13 @@ final class PlaidService {
         
         config.onExit = { exit in
             if let e = exit.error {
-                onError(e)
+                onError(.unknown(e))
             }
         }
         
         switch Plaid.create(config) {
         case .failure(let err):
-            onError(err)
+            onError(.unknown(err))
         case .success(let handler):
             self.linkHandler = handler
             handler.open(presentUsing: .viewController(viewController))
@@ -78,7 +78,7 @@ final class PlaidService {
     }
     
     /// Tells the backend to securely unlink the user's account.
-    func unlinkAccount(completion: @escaping (Result<Bool, Error>) -> Void) {
+    func unlinkAccount(completion: @escaping (Result<Bool, NetworkError>) -> Void) {
         // FIX: Use the EmptyBody struct here as well.
         NetworkService.postJSON(
             to: API.removeItem.url,
@@ -92,7 +92,7 @@ final class PlaidService {
     /// Sends the public token to the backend to be exchanged and stored securely.
     private func exchangePublicTokenOnBackend(
         _ publicToken: String,
-        completion: @escaping (Result<Bool, Error>) -> Void
+        completion: @escaping (Result<Bool, NetworkError>) -> Void
     ) {
         // FIX: Use the new, type-safe ExchangeTokenRequest struct.
         let requestBody = ExchangeTokenRequest(publicToken: publicToken)
