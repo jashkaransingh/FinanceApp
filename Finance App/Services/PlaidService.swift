@@ -21,13 +21,12 @@ final class PlaidService {
     /// Starts the Plaid Link flow
     func startPlaidLink(
         from viewController: UIViewController,
-        onSuccess: @escaping () -> Void,
+        onSuccess: @escaping () -> Void, // <-- Use a simple closure
         onError: @escaping (NetworkError) -> Void
     ) {
-        // FIX: Use the new, type-safe EmptyBody struct for requests with no body.
         NetworkService.postJSON(
             to: API.createLinkToken.url,
-            body: EmptyBody(), // This is now explicit and safe.
+            body: EmptyBody(),
             decodeTo: LinkTokenResponse.self
         ) { result in
             switch result {
@@ -37,7 +36,7 @@ final class PlaidService {
                 self.presentLinkUI(
                     token: response.link_token,
                     from: viewController,
-                    onSuccess: onSuccess,
+                    onSuccess: onSuccess, // <-- Pass it through
                     onError: onError
                 )
             }
@@ -48,14 +47,14 @@ final class PlaidService {
     private func presentLinkUI(
         token: String,
         from viewController: UIViewController,
-        onSuccess: @escaping () -> Void,
+        onSuccess: @escaping () -> Void, // <-- Use a simple closure
         onError: @escaping (NetworkError) -> Void
     ) {
         var config = LinkTokenConfiguration(token: token) { linkSuccess in
             self.exchangePublicTokenOnBackend(linkSuccess.publicToken) { result in
                 switch result {
                 case .success:
-                    onSuccess()
+                    onSuccess() // <-- Call it on success!
                 case .failure(let err):
                     onError(err)
                 }

@@ -118,6 +118,7 @@ final class LinkedAccountsViewController: UIViewController {
         // This listener will be called immediately with the current data,
         // and then again every time the data changes on the server.
         firestoreListener = docRef.addSnapshotListener { [weak self] (document, error) in
+            print("🔥 FIRESTORE LISTENER FIRED! 🔥")
             guard let self = self else { return }
             
             if let error = error {
@@ -175,7 +176,7 @@ final class LinkedAccountsViewController: UIViewController {
         PlaidService.shared.startPlaidLink(from: self, onSuccess: { [weak self] in
             // Again, no need to manually set isAccountLinked. The listener handles it.
             print("Plaid Link successful. Firestore listener will update UI.")
-            self?.notifyHomeToRefresh()
+            
         }, onError: { error in
             print("Plaid Link flow failed: \(error)")
         })
@@ -183,13 +184,13 @@ final class LinkedAccountsViewController: UIViewController {
     
     // MARK: – Coordination
     
-    private func notifyHomeToRefresh() {
-        // This is still a good idea to have, in case the user navigates back quickly.
-        if let nav = navigationController,
-           let homeVC = nav.viewControllers.first(where: { $0 is AccountsViewController }) as? AccountsViewController {
-            homeVC.needsRefresh = true
-        }
-    }
+//    private func notifyHomeToRefresh() {
+//        // This is still a good idea to have, in case the user navigates back quickly.
+//        if let nav = navigationController,
+//           let homeVC = nav.viewControllers.first(where: { $0 is AccountsViewController }) as? AccountsViewController {
+//            homeVC.needsRefresh = true
+//        }
+//    }
 }
 
 // MARK: - UITableViewDataSource, UITableViewDelegate
