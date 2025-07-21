@@ -80,7 +80,7 @@ def exchange_public_token():
         user_ref.update({
             'plaidAccessToken': access_token,
             'plaidItemId': item_id,
-            'isBankConnected': True
+            'isBankConnected': False
         })
         
         print(f"✅ Successfully saved access token for user {uid}")

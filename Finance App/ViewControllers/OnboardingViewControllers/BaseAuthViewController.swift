@@ -13,56 +13,63 @@ import GoogleSignIn
 import CryptoKit
 import FirebaseCore
 
+// MARK: - BaseAuthViewController
 class BaseAuthViewController: UIViewController {
-    
-    // MARK: - Nonce for Apple Sign In
+
+    // MARK: - Properties
     fileprivate var currentNonce: String?
     
-    // MARK: - Shared UI Properties
+    // To be configured by subclasses
+    var primaryButton: PrimaryButton!
+    var textFields: [AuthTextField] = []
+
+    // MARK: - Common UI Components
     let backgroundImageView: UIImageView = {
         let imageView = UIImageView()
         imageView.image = UIImage(named: "marble_background")
         imageView.contentMode = .scaleAspectFill
         return imageView
     }()
-    
+
     let titleLabel: UILabel = {
         let label = UILabel()
         label.font = .systemFont(ofSize: 32, weight: .bold)
         label.textColor = .label
         return label
     }()
-    
+
     let subtitleLabel: UILabel = {
         let label = UILabel()
+        label.text = "Start tracking your finances."
         label.font = .systemFont(ofSize: 16, weight: .regular)
         label.textColor = .secondaryLabel
         return label
     }()
-    
+
     let glassCard: UIView = {
         let view = UIView()
         view.backgroundColor = UIColor.white.withAlphaComponent(0.6)
         view.layer.cornerRadius = 24
         view.clipsToBounds = true
-        
+
         let blurEffect = UIBlurEffect(style: .light)
         let blurView = UIVisualEffectView(effect: blurEffect)
-        blurView.translatesAutoresizingMaskIntoConstraints = false
+        blurView.frame = view.bounds
+        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(blurView)
-        NSLayoutConstraint.activate([
-            blurView.topAnchor.constraint(equalTo: view.topAnchor),
-            blurView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            blurView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            blurView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
-        
         return view
     }()
     
-    let emailField = AuthTextField(icon: UIImage(systemName: "envelope.fill"))
-    let passwordField = AuthTextField(icon: UIImage(systemName: "lock.fill"), isSecure: true)
-    let separatorLabel: UILabel = {
+    // StackView to hold form elements (email, password, buttons)
+    // Subclasses will add their specific views to this stack.
+    let formStackView: UIStackView = {
+        let stackView = UIStackView()
+        stackView.axis = .vertical
+        stackView.spacing = 16
+        return stackView
+    }()
+    
+    private let separatorLabel: UILabel = {
         let label = UILabel()
         label.text = "or"
         label.font = .systemFont(ofSize: 12)
@@ -70,34 +77,20 @@ class BaseAuthViewController: UIViewController {
         label.textAlignment = .center
         return label
     }()
-    lazy var appleSignInButton = createSocialButton(logo: UIImage(systemName: "apple.logo"))
-    lazy var googleSignInButton = createSocialButton(logo: UIImage(named: "google_logo"))
     
+    private lazy var appleSignInButton = createSocialButton(logo: UIImage(systemName: "apple.logo"))
+    private lazy var googleSignInButton = createSocialButton(logo: UIImage(named: "google_logo"))
+
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        configureNavigationBar()
-        setupSharedSubviews()
-        setupSharedConstraints()
-        setupSharedTargets()
+        setupCommonUI()
+        setupCommonConstraints()
+        setupSocialButtonTargets()
     }
-    
-    // MARK: - Base Setup (Subclasses will call these)
-    
-    /// Configures the base navigation bar appearance.
-    func configureNavigationBar() {
-        self.navigationController?.navigationBar.setBackgroundImage(UIImage(), for: .default)
-        self.navigationController?.navigationBar.shadowImage = UIImage()
-        self.navigationController?.navigationBar.isTranslucent = true
-        self.navigationController?.navigationBar.tintColor = .label
-        self.navigationController?.navigationBar.isHidden = (self is LoginViewController)
-    }
-    
-    /// Adds all shared views to the view hierarchy. Subclasses can override to add more.
-    func setupSharedSubviews() {
-        emailField.textField.placeholder = "Email"
-        passwordField.textField.placeholder = "Password"
-        
+
+    // MARK: - Common Setup
+    private func setupCommonUI() {
         view.addSubview(backgroundImageView)
         view.addSubview(titleLabel)
         view.addSubview(subtitleLabel)
@@ -105,134 +98,141 @@ class BaseAuthViewController: UIViewController {
         
         guard let cardContentView = (glassCard.subviews.first as? UIVisualEffectView)?.contentView else { return }
         
-        cardContentView.addSubview(emailField)
-        cardContentView.addSubview(passwordField)
+        let socialButtonsStack = UIStackView(arrangedSubviews: [appleSignInButton, googleSignInButton])
+        socialButtonsStack.spacing = 12
+        socialButtonsStack.distribution = .fillEqually
+        
+        cardContentView.addSubview(formStackView)
         cardContentView.addSubview(separatorLabel)
-        cardContentView.addSubview(appleSignInButton)
-        cardContentView.addSubview(googleSignInButton)
+        cardContentView.addSubview(socialButtonsStack)
+
+        [backgroundImageView, titleLabel, subtitleLabel, glassCard, formStackView, separatorLabel, socialButtonsStack].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
     }
     
-    /// Sets up constraints for all shared views. Subclasses are responsible for their own constraints.
-    func setupSharedConstraints() {
-        // This helper function is defined below
-        viewsToDisableAutoLayoutFor().forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+    private func setupCommonConstraints() {
+        guard let socialButtonsStack = googleSignInButton.superview else { return }
         
         NSLayoutConstraint.activate([
             backgroundImageView.topAnchor.constraint(equalTo: view.topAnchor),
             backgroundImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             backgroundImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             backgroundImageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
+
             titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             titleLabel.bottomAnchor.constraint(equalTo: subtitleLabel.topAnchor, constant: -8),
-            
+
             subtitleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             subtitleLabel.bottomAnchor.constraint(equalTo: glassCard.topAnchor, constant: -24),
-            
+
             glassCard.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             glassCard.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             glassCard.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             
-            // Social buttons are the same for both, so they can be constrained here
-            appleSignInButton.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 20),
-            appleSignInButton.trailingAnchor.constraint(equalTo: googleSignInButton.leadingAnchor, constant: -12),
-            appleSignInButton.heightAnchor.constraint(equalToConstant: 50),
+            // --- Constraints inside the card ---
+            formStackView.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: 24),
+            formStackView.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 20),
+            formStackView.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -20),
+
+            separatorLabel.topAnchor.constraint(equalTo: formStackView.bottomAnchor, constant: 20),
+            separatorLabel.leadingAnchor.constraint(equalTo: formStackView.leadingAnchor),
+            separatorLabel.trailingAnchor.constraint(equalTo: formStackView.trailingAnchor),
             
-            googleSignInButton.topAnchor.constraint(equalTo: appleSignInButton.topAnchor),
-            googleSignInButton.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -20),
-            googleSignInButton.widthAnchor.constraint(equalTo: appleSignInButton.widthAnchor),
-            googleSignInButton.heightAnchor.constraint(equalTo: appleSignInButton.heightAnchor),
+            socialButtonsStack.topAnchor.constraint(equalTo: separatorLabel.bottomAnchor, constant: 16),
+            socialButtonsStack.leadingAnchor.constraint(equalTo: formStackView.leadingAnchor),
+            socialButtonsStack.trailingAnchor.constraint(equalTo: formStackView.trailingAnchor),
+            socialButtonsStack.heightAnchor.constraint(equalToConstant: 50),
+            socialButtonsStack.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -24)
         ])
     }
     
-    /// A helper for subclasses to provide all their views for Auto Layout setup.
-    func viewsToDisableAutoLayoutFor() -> [UIView] {
-        return [backgroundImageView, titleLabel, subtitleLabel, glassCard, emailField, passwordField, separatorLabel, appleSignInButton, googleSignInButton]
-    }
-    
-    /// Connects targets for shared buttons. Subclasses should add their own.
-    func setupSharedTargets() {
+    private func setupSocialButtonTargets() {
         appleSignInButton.addTarget(self, action: #selector(handleAppleSignIn), for: .touchUpInside)
         googleSignInButton.addTarget(self, action: #selector(handleGoogleSignIn), for: .touchUpInside)
     }
-    
-    /// Factory method for creating social sign-in buttons.
-    func createSocialButton(logo: UIImage?) -> UIButton {
-        let button = UIButton(type: .system)
-        var config = UIButton.Configuration.plain()
-        
-        config.image = logo
-        config.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
-        config.background.backgroundColor = .white.withAlphaComponent(0.8)
-        config.background.cornerRadius = 14
-        button.configuration = config
-        button.tintColor = .label
-        return button
-    }
-    
-    // MARK: - Shared Actions (Apple & Google)
-    @objc func handleAppleSignIn() {
+
+    // MARK: - Social Sign-In Actions
+    @objc private func handleAppleSignIn() {
         let nonce = randomNonceString()
         currentNonce = nonce
         let appleIDProvider = ASAuthorizationAppleIDProvider()
         let request = appleIDProvider.createRequest()
         request.requestedScopes = [.fullName, .email]
         request.nonce = sha256(nonce)
-        
+
         let authorizationController = ASAuthorizationController(authorizationRequests: [request])
         authorizationController.delegate = self
         authorizationController.presentationContextProvider = self
         authorizationController.performRequests()
     }
     
-    @objc func handleGoogleSignIn() {
-        // Implementation is identical for login and signup
+    @objc private func handleGoogleSignIn() {
+        setLoading(true)
         GIDSignIn.sharedInstance.signIn(withPresenting: self) { [weak self] signInResult, error in
             guard let self = self else { return }
-            
+
             if let error = error {
-                self.showAlert(title: "Google Sign-In Failed", message: error.localizedDescription)
+                self.setLoading(false)
+                self.presentAlert(title: "Google Sign-In Failed", message: error.localizedDescription)
                 return
             }
-            
+
             guard let result = signInResult, let idToken = result.user.idToken?.tokenString else {
-                self.showAlert(title: "Google Sign-In Failed", message: "Could not retrieve Google ID Token.")
+                self.setLoading(false)
+                self.presentAlert(title: "Google Sign-In Failed", message: "Could not retrieve Google ID token.")
                 return
             }
-            
-            self.setLoading(true) // Start loading *after* Google UI is dismissed
+
             AuthService.signInWithGoogle(idToken: idToken) { success in
                 self.setLoading(false)
                 if success {
                     SceneDelegate.switchToMainApp()
                 } else {
-                    self.showAlert(title: "Sign-In Failed", message: "An error occurred while signing in with Google.")
+                    self.presentAlert(title: "Google Sign-In Failed", message: "Could not sign in with Google.")
                 }
             }
         }
     }
-    
-    // MARK: - Shared Helpers
+
+    // MARK: - Helpers
     func setLoading(_ isLoading: Bool) {
-        // Implementation will be slightly different for each subclass,
-        // so we'll let them override it.
+        DispatchQueue.main.async {
+            self.primaryButton?.isEnabled = !isLoading
+            self.appleSignInButton.isEnabled = !isLoading
+            self.googleSignInButton.isEnabled = !isLoading
+            self.textFields.forEach { $0.isUserInteractionEnabled = !isLoading }
+            
+            let buttonTitle = isLoading ? "Loading..." : self.primaryButton?.title(for: .normal)
+            self.primaryButton?.setTitle(buttonTitle, for: .normal)
+        }
     }
-    
-    func showAlert(title: String, message: String) {
+
+    func presentAlert(title: String, message: String) {
         DispatchQueue.main.async {
             let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
+            alert.addAction(.init(title: "OK", style: .default))
             self.present(alert, animated: true)
         }
     }
+
+    private func createSocialButton(logo: UIImage?) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setImage(logo, for: .normal)
+        button.tintColor = .label
+        button.backgroundColor = .white.withAlphaComponent(0.8)
+        button.layer.cornerRadius = 14
+        button.imageView?.contentMode = .scaleAspectFit
+        button.imageEdgeInsets = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        return button
+    }
     
-    // MARK: - Crypto Helpers for Apple Sign-In
+    // MARK: - Crypto Helpers
     private func randomNonceString(length: Int = 32) -> String {
         precondition(length > 0)
         let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
         var result = ""
         var remainingLength = length
-        
         while remainingLength > 0 {
             let randoms: [UInt8] = (0 ..< 16).map { _ in
                 var random: UInt8 = 0
@@ -242,7 +242,6 @@ class BaseAuthViewController: UIViewController {
                 }
                 return random
             }
-            
             randoms.forEach { random in
                 if remainingLength == 0 { return }
                 if random < charset.count {
@@ -253,29 +252,25 @@ class BaseAuthViewController: UIViewController {
         }
         return result
     }
-    
+
     private func sha256(_ input: String) -> String {
         let inputData = Data(input.utf8)
         let hashedData = SHA256.hash(data: inputData)
-        let hashString = hashedData.compactMap { String(format: "%02x", $0) }.joined()
-        return hashString
+        return hashedData.compactMap { String(format: "%02x", $0) }.joined()
     }
 }
 
-// MARK: - Apple Sign-In Delegate Methods
+// MARK: - Apple Sign-In Delegate
 extension BaseAuthViewController: ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
-    
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
         return self.view.window!
     }
-    
+
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
             guard let nonce = currentNonce else {
-                showAlert(title: "Apple Sign-In Failed", message: "Invalid state: A login callback was received without a nonce.")
-                return
+                fatalError("Invalid state: A login callback was received, but no nonce was stored.")
             }
-            
             setLoading(true)
             AuthService.signInWithApple(credential: appleIDCredential, nonce: nonce) { [weak self] success in
                 guard let self = self else { return }
@@ -283,14 +278,15 @@ extension BaseAuthViewController: ASAuthorizationControllerDelegate, ASAuthoriza
                 if success {
                     SceneDelegate.switchToMainApp()
                 } else {
-                    self.showAlert(title: "Sign-In Failed", message: "An error occurred while signing in with Apple.")
+                    self.presentAlert(title: "Apple Sign-In Failed", message: "Could not sign in with Apple.")
                 }
             }
         }
     }
-    
+
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        print("Apple Sign-In failed with error: \(error.localizedDescription)")
-        showAlert(title: "Apple Sign-In Failed", message: "An error occurred. Please try again.")
+        print("Sign in with Apple failed: \(error.localizedDescription)")
+        setLoading(false)
+        presentAlert(title: "Apple Sign-In Failed", message: error.localizedDescription)
     }
 }

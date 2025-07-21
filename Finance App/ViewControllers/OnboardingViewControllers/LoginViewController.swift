@@ -7,73 +7,81 @@
 
 import UIKit
 
-final class LoginViewController: BaseAuthViewController {
+class LoginViewController: BaseAuthViewController {
 
-    // MARK: - Unique UI Properties
-    private let loginButton = PrimaryButton(title: "Log In")
+    // MARK: - Specific UI Components
+    private let emailField = AuthTextField(icon: UIImage(systemName: "envelope.fill"))
+    private let passwordField = AuthTextField(icon: UIImage(systemName: "lock.fill"), isSecure: true)
     private let forgotPasswordButton = LinkButton(title: "Forgot password?")
+    private let loginButton = PrimaryButton(title: "Log In")
     private let switchToSignupButton = LinkButton(title: "Don't have an account? Sign up")
 
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        self.navigationController?.navigationBar.isHidden = true
+        
+        configureUI()
+        setupLayout()
+        setupTargets()
+    }
 
+    // MARK: - Setup
+    private func configureUI() {
+        // Configure titles inherited from base class
         titleLabel.text = "Welcome Back"
-        subtitleLabel.text = "Sign in to continue."
-
-        setupUniqueSubviews()
-        setupUniqueConstraints()
-        setupUniqueTargets()
-    }
-
-    // MARK: - Unique Setup
-    private func setupUniqueSubviews() {
-        switchToSignupButton.setTitleColor(.secondaryLabel, for: .normal)
+        
+        // Configure specific UI
+        emailField.textField.placeholder = "Email"
+        passwordField.textField.placeholder = "Password"
         forgotPasswordButton.setTitleColor(.secondaryLabel, for: .normal)
+        switchToSignupButton.setTitleColor(.secondaryLabel, for: .normal)
         
-        guard let cardContentView = (glassCard.subviews.first as? UIVisualEffectView)?.contentView else { return }
-        
-        cardContentView.addSubview(loginButton)
-        cardContentView.addSubview(forgotPasswordButton)
-        view.addSubview(switchToSignupButton)
+        // Assign components to base class properties for shared logic
+        self.primaryButton = loginButton
+        self.textFields = [emailField, passwordField]
     }
-
-    private func setupUniqueConstraints() {
-        [loginButton, forgotPasswordButton, switchToSignupButton].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+    
+    private func setupLayout() {
+        // Add specific components to the form stack view
+        formStackView.addArrangedSubview(emailField)
+        formStackView.addArrangedSubview(passwordField)
+        
+        // Use a container for the right-aligned forgot password button
+        let forgotPasswordContainer = UIView()
+        forgotPasswordContainer.addSubview(forgotPasswordButton)
+        formStackView.addArrangedSubview(forgotPasswordContainer)
+        
+        formStackView.addArrangedSubview(loginButton)
+        formStackView.setCustomSpacing(12, after: passwordField)
+        formStackView.setCustomSpacing(20, after: forgotPasswordContainer)
+        
+        // Add the switch button to the main view
+        view.addSubview(switchToSignupButton)
+        
+        [forgotPasswordButton, switchToSignupButton].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
         
         NSLayoutConstraint.activate([
-            emailField.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: 24),
-            
-            passwordField.topAnchor.constraint(equalTo: emailField.bottomAnchor, constant: 16),
-            
-            forgotPasswordButton.topAnchor.constraint(equalTo: passwordField.bottomAnchor, constant: 12),
-            forgotPasswordButton.trailingAnchor.constraint(equalTo: passwordField.trailingAnchor),
-            
-            loginButton.topAnchor.constraint(equalTo: forgotPasswordButton.bottomAnchor, constant: 12),
-            loginButton.leadingAnchor.constraint(equalTo: emailField.leadingAnchor),
-            loginButton.trailingAnchor.constraint(equalTo: emailField.trailingAnchor),
-            
-            separatorLabel.topAnchor.constraint(equalTo: loginButton.bottomAnchor, constant: 20),
-            
-            appleSignInButton.topAnchor.constraint(equalTo: separatorLabel.bottomAnchor, constant: 16),
-            appleSignInButton.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -24),
-            
+            forgotPasswordButton.topAnchor.constraint(equalTo: forgotPasswordContainer.topAnchor),
+            forgotPasswordButton.trailingAnchor.constraint(equalTo: forgotPasswordContainer.trailingAnchor),
+            forgotPasswordButton.bottomAnchor.constraint(equalTo: forgotPasswordContainer.bottomAnchor),
+
             switchToSignupButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             switchToSignupButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16)
         ])
     }
-
-    private func setupUniqueTargets() {
+    
+    private func setupTargets() {
         loginButton.addTarget(self, action: #selector(handleLogin), for: .touchUpInside)
         forgotPasswordButton.addTarget(self, action: #selector(handleForgotPassword), for: .touchUpInside)
         switchToSignupButton.addTarget(self, action: #selector(goToSignup), for: .touchUpInside)
     }
 
-    // MARK: - Unique Actions
+    // MARK: - Actions
     @objc private func handleLogin() {
         guard let email = emailField.textField.text, !email.isEmpty,
               let password = passwordField.textField.text, !password.isEmpty else {
-            showAlert(title: "Missing Fields", message: "Please enter both email and password.")
+            presentAlert(title: "Missing Fields", message: "Please enter both email and password.")
             return
         }
         
@@ -84,7 +92,7 @@ final class LoginViewController: BaseAuthViewController {
             if success {
                 SceneDelegate.switchToMainApp()
             } else {
-                self.showAlert(title: "Login Failed", message: "Please check your email and password.")
+                self.presentAlert(title: "Login Failed", message: "Please check your email and password.")
             }
         }
     }
@@ -93,23 +101,10 @@ final class LoginViewController: BaseAuthViewController {
         let vc = ResetPasswordViewController()
         navigationController?.pushViewController(vc, animated: true)
     }
-
+    
     @objc private func goToSignup() {
         let vc = SignupViewController()
         navigationController?.pushViewController(vc, animated: true)
-    }
-    
-    // MARK: - Overrides
-    override func setLoading(_ isLoading: Bool) {
-        loginButton.isEnabled = !isLoading
-        appleSignInButton.isEnabled = !isLoading
-        googleSignInButton.isEnabled = !isLoading
-        
-        emailField.isUserInteractionEnabled = !isLoading
-        passwordField.isUserInteractionEnabled = !isLoading
-        
-        let buttonTitle = isLoading ? "Logging In..." : "Log In"
-        loginButton.setTitle(buttonTitle, for: .normal)
     }
 }
 
