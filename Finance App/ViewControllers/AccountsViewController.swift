@@ -10,18 +10,21 @@ import LinkKit
 import FirebaseAuth
 import FirebaseFirestore
 
+
 class AccountsViewController: UIViewController {
     
+    
+    
     // MARK: - UI Properties
-    private let headerView = TitleHeaderView()
-    private let scrollView = UIScrollView()
-    private let stackView  = UIStackView()
+    private let headerView = TitleHeaderView()// 'My Accounts' header at top
+    private let scrollView = UIScrollView()// Scrollable area for cards
+    private let stackView  = UIStackView()// Vertical stack inside scrollView
     private let refreshControl = UIRefreshControl()
     
     // MARK: – Data Properties
-    private var summaries: [AccountSummary] = []
-    var needsRefresh = true // Tracks whether we need to re-fetch the cards
-    private var placeholderButton: UIButton?
+    private var summaries: [AccountSummary] = []//list of account summaries (fetched from backend)
+    var needsRefresh = true// Tracks whether we need to re‐fetch the cards
+    private var placeholderButton: UIButton?// If no accounts exist yet, we show a placeholder “Connect Bank” button
     private var isLoading = false
     
     // MARK: – Lifecycle
@@ -56,7 +59,7 @@ class AccountsViewController: UIViewController {
     }
     
     // MARK: – UI Configuration
-    private func configureHeader() {
+    private func configureHeader() {// Configures and constrains the custom headerView.
         view.addSubview(headerView)
         headerView.translatesAutoresizingMaskIntoConstraints = false
         
@@ -64,7 +67,7 @@ class AccountsViewController: UIViewController {
             headerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
             headerView.leadingAnchor.constraint(equalTo: view.leadingAnchor,   constant: 16),
             headerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            headerView.heightAnchor.constraint(equalToConstant: 44)
+            headerView.heightAnchor.constraint(equalToConstant: 44) // match native nav-bar height
         ])
     }
     
@@ -72,9 +75,10 @@ class AccountsViewController: UIViewController {
         headerView.onProfileTap = { [weak self] in
             self?.openProfile()
         }
+        
     }
     
-    private func configureScrollView() {
+    private func configureScrollView() {// Configures and constrains the scrollView below the header
         view.addSubview(scrollView)
         scrollView.alwaysBounceVertical = true
         scrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -87,15 +91,18 @@ class AccountsViewController: UIViewController {
         ])
     }
     
-    private func configureStackView() {
+    private func configureStackView() {// Configures the vertical stackView inside the scrollView
+        // Configure the stack
         stackView.axis = .vertical
         stackView.spacing = 16
         stackView.layoutMargins = .init(top: 16, left: 16, bottom: 16, right: 16)
         stackView.isLayoutMarginsRelativeArrangement = true
         
+        // Embed in scrollView
         scrollView.addSubview(stackView)
         stackView.translatesAutoresizingMaskIntoConstraints = false
         
+        // Add Constraints
         NSLayoutConstraint.activate([
             stackView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
             stackView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
@@ -105,7 +112,7 @@ class AccountsViewController: UIViewController {
         ])
     }
     
-    private func configureFloatingButton() {
+    private func configureFloatingButton() {// Adds the “+” floating button in the bottom‐right corner
         let fab = FloatingActionButton()
         view.addSubview(fab)
         
@@ -117,7 +124,7 @@ class AccountsViewController: UIViewController {
     }
     
     // MARK: – Skeleton & Placeholder
-    private func showSkeletonCards() {
+    private func showSkeletonCards() {// Show loading animation while fetching data
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for _ in 0..<3 {
             let skeleton = ShimmerView()
@@ -127,18 +134,22 @@ class AccountsViewController: UIViewController {
         }
     }
     
-    private func makeConnectButton() -> UIButton {
+    
+    private func makeConnectButton() -> UIButton {// Builds “Connect Your Bank” button
         let btn = UIButton(type: .system)
         btn.setTitle("Connect Your Bank", for: .normal)
         btn.setTitleColor(.systemBlue, for: .normal)
         btn.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
-        btn.backgroundColor = .secondarySystemBackground
-        btn.layer.cornerRadius = 10
+        btn.backgroundColor = .secondarySystemBackground// background color
+        btn.layer.cornerRadius = 10// Rounded corners and border
         btn.layer.borderWidth = 2
         btn.layer.borderColor = UIColor.systemBlue.cgColor
+        
         btn.translatesAutoresizingMaskIntoConstraints = false
-        btn.widthAnchor.constraint(equalToConstant: 200).isActive = true
-        btn.heightAnchor.constraint(equalToConstant: 50).isActive = true
+        
+        btn.widthAnchor.constraint(equalToConstant: 200).isActive = true// button’s width so it doesn’t stretch full width
+        btn.heightAnchor.constraint(equalToConstant: 50).isActive = true// button’s height
+        
         return btn
     }
     
@@ -148,6 +159,9 @@ class AccountsViewController: UIViewController {
         fetchData()
     }
     
+    /// Check Firestore for saved access token
+    /// If found, save locally and load summaries
+    /// Otherwise show a “Connect Bank” placeholder.
     private func fetchData() {
         isLoading = true
         showSkeletonCards()
@@ -174,11 +188,13 @@ class AccountsViewController: UIViewController {
         }
     }
     
+    /// Remove “Connect Bank” button, fetch from backend, then render cards
     private func loadSummaries() {
         placeholderButton?.removeFromSuperview()
         placeholderButton = nil
         stackView.alignment = .fill
         
+        // Call the new, simple, and secure DataService function.
         DataService.loadSummaries { [weak self] result in
             guard let self = self else { return }
             
@@ -191,13 +207,28 @@ class AccountsViewController: UIViewController {
                 self.summaries = summaries
                 self.populateCards()
                 HapticsManager.trigger(.medium)
-            case .failure(let error):
-                print("❌ Failed to load summaries:", error)
-                self.showPlaceholder(message: "Could not load accounts.")
-            }
-            self.refreshControl.endRefreshing()
-        }
-    }
+                // Now that summaries are loaded, also fetch recent transactions
+                            // to ensure the widget gets updated.
+                            let endDate = Date()
+                            guard let startDate = Calendar.current.date(byAdding: .day, value: -7, to: endDate) else { return }
+                            let formatter = ISO8601DateFormatter()
+                            
+                            DataService.loadTransactions(
+                                startDate: formatter.string(from: startDate),
+                                endDate: formatter.string(from: endDate)
+                            ) { _ in
+                                // We don't need to do anything with the result here,
+                                // because the widget logic is handled inside DataService.
+                                print("Transactions fetched for widget update.")
+                            }
+                            // ---------------------
+
+                        case .failure(let error):
+                            print("❌ Failed to load summaries:", error)
+                        }
+                        self.refreshControl.endRefreshing()
+                    }
+                }
     
     private func showPlaceholder(message: String) {
         isLoading = false
@@ -207,7 +238,7 @@ class AccountsViewController: UIViewController {
         refreshControl.endRefreshing()
         
         let button = makeConnectButton()
-        button.setTitle(message, for: .normal)
+        button.setTitle(message, for: .normal) // More flexible placeholder
         button.addTarget(self, action: #selector(startPlaidLinkFlow), for: .touchUpInside)
         placeholderButton = button
         
@@ -220,37 +251,70 @@ class AccountsViewController: UIViewController {
     
     // MARK: – UI Population
     private func populateCards() {
-        summaries.forEach { model in
-            let card = AccountCardView()
-            card.configure(with: model)
+        summaries.forEach { model in//iterate through each item in summaries
+            let card = AccountCardView()//create instance of custom card view
+            card.configure(with: model)//passes data model to the card
             card.translatesAutoresizingMaskIntoConstraints = false
             card.heightAnchor.constraint(equalToConstant: 140).isActive = true
-            card.addTarget(self, action: #selector(cardTapped(_:)), for: .touchUpInside)
-            stackView.addArrangedSubview(card)
+            //    Add tap gesture to the card
+            card.addTarget(self, action: #selector(cardTapped(_:)), for: .touchUpInside)//add tap gesture
+            
+            stackView.addArrangedSubview(card)//add the card to the stackView
         }
+        //        let card = WalletCardView()
+        //        card.translatesAutoresizingMaskIntoConstraints = false
+        //        card.configure(
+        //          bankName:      "Bank of America",
+        //          cardholder:    "Noor Singh",
+        //          maskedNumber:  "•••• 1234",
+        //          expiry:        "08/27",
+        //          balance:       2_345.67,
+        //          gradientColors:[
+        //            UIColor(red: 0.05, green: 0.45, blue: 0.85, alpha: 1),
+        //            UIColor(red: 0.15, green: 0.65, blue: 0.95, alpha: 1)
+        //          ]
+        //        )
+        //        stackView.addArrangedSubview(card)
+        //
+        //        // if in a vertical UIStackView, constrain height:
+        //        NSLayoutConstraint.activate([
+        //          card.heightAnchor.constraint(equalToConstant: 200)
+        //        ])
+        
     }
     
     // MARK: – Actions
+    /// The action for the main floating button.
     @objc private func didTapBudgetAssistant() {
         let vc = BudgetAssistantViewController()
         navigationController?.pushViewController(vc, animated: true)
     }
     
+    /// The new, correct action for the "Connect Bank" placeholder button.
     @objc private func startPlaidLinkFlow() {
-        PlaidService.shared.startPlaidLink(from: self, onSuccess: { [weak self] in
-            // On success, we just need to refresh the view.
-            self?.needsRefresh = true
-            self?.fetchData()
-        }, onError: { error in
-            print("❌ Plaid Link flow failed: \(error)")
-            if case .sessionExpired = error {
-                SceneDelegate.switchToLogin()
-            }
-        })
+        PlaidService.shared.startPlaidLink(from: self) { [weak self] in
+          guard let self = self else { return }
+          let uid = Auth.auth().currentUser!.uid
+          Firestore.firestore()
+            .collection("users")
+            .document(uid)
+            .setData(["isBankConnected": true], merge: true) { error in
+              if let error = error {
+                print("couldn’t mark bank connected:", error)
+                return
+              }
+              self.needsRefresh = true
+              self.fetchData()
+          }
+        } onError: { error in
+            print("Plaid Link flow failed:", error)
+        }
     }
     
     @objc private func cardTapped(_ card: AccountCardView) {
-        guard let model = card.model else { return }
+        guard//unwrap model
+            let model = card.model
+        else { return }
         
         HapticsManager.trigger(.light)
         
@@ -262,7 +326,7 @@ class AccountsViewController: UIViewController {
             return "today"
         }()
         
-        navigationController?.pushViewController(detailVC, animated: true)
+        navigationController?.pushViewController(detailVC, animated: true)//pushes into navigation stack
     }
     
     @objc private func openProfile() {
@@ -270,6 +334,7 @@ class AccountsViewController: UIViewController {
         let settingsVC = SettingsViewController(style: .insetGrouped)
         navigationController?.pushViewController(settingsVC, animated: true)
     }
+    
 }
 
 // === Data Flow ===

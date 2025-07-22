@@ -36,7 +36,7 @@ def create_link_token():
             products=[Products("transactions")],
             country_codes=[CountryCode("US")],
             language="en",
-            redirect_uri=config.PLAID_REDIRECT_URI # <-- ADD THIS LINE
+            redirect_uri=config.PLAID_REDIRECT_URI 
         )
         
         # 3. Make the request to Plaid and return the link_token to the client.
@@ -80,7 +80,7 @@ def exchange_public_token():
         user_ref.update({
             'plaidAccessToken': access_token,
             'plaidItemId': item_id,
-            'isBankConnected': False
+            'isBankConnected': True
         })
         
         print(f"✅ Successfully saved access token for user {uid}")
