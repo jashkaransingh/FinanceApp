@@ -3,6 +3,7 @@ from datetime import date, timedelta
 import traceback
 from firebase_admin import auth, firestore
 from plaid_client import fetch_all_transactions
+from services.transaction_service import sync_transactions_for_item
 
 tx_bp = Blueprint("transactions", __name__)
 
