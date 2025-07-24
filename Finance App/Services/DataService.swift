@@ -59,12 +59,23 @@ class DataService {
     
     /// Fetches transactions for a given period.
     static func loadTransactions(
-        startDate: String,
-        endDate: String,
-        completion: @escaping (Result<[Transaction], NetworkError>) -> Void // <-- UPDATED
+        startDate: String? = nil,
+        endDate: String? = nil,
+        period: String? = nil,
+        completion: @escaping (Result<[Transaction], NetworkError>) -> Void
     ) {
-        let queries = ["start_date": startDate, "end_date": endDate]
+        // 1. Start with an empty dictionary of the correct type.
+        var queries: [String: String] = [:]
+
+        // 2. Conditionally add the parameters that exist.
+        if let period = period {
+            queries["period"] = period
+        } else if let startDate = startDate, let endDate = endDate {
+            queries["start_date"] = startDate
+            queries["end_date"] = endDate
+        }
         
+        // 3. Make the network call with the safely-built dictionary.
         NetworkService.getJSON(from: API.transactions.url, queries: queries, decodeTo: TransactionsResponse.self) { result in
             completion(result.map { $0.transactions })
         }

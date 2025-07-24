@@ -12,11 +12,11 @@ import FirebaseFirestore
 final class LinkedAccountsViewController: UIViewController {
     
     // MARK: – Properties
-    
+    private var didPerformFirstUIUpdate = false
     private var isAccountLinked: Bool = false {
         didSet {
-            // This is the single source of truth for our UI state.
-            updateUIForLinkStatus()
+            updateUIForLinkStatus(animated: didPerformFirstUIUpdate)
+            didPerformFirstUIUpdate = true
         }
     }
     
@@ -47,6 +47,16 @@ final class LinkedAccountsViewController: UIViewController {
         
         setupTableView()
         setupEmptyStateView()
+        tableView.isHidden      = true
+        emptyStateView.isHidden = true
+        if let uid = Auth.auth().currentUser?.uid {
+            Firestore.firestore().collection("users").document(uid)
+                .getDocument { [weak self] doc, _ in
+                    let linked = doc?.data()?["isBankConnected"] as? Bool ?? false
+                    self?.isAccountLinked = linked
+                }
+        }
+        // 2) Then listen for live updates
         addSnapshotListenerForLinkStatus()
     }
     
@@ -87,18 +97,26 @@ final class LinkedAccountsViewController: UIViewController {
     }
     
     /// Updates the visibility of UI elements based on whether an account is linked.
-    private func updateUIForLinkStatus() {
-        // Determine which view to show and which to hide
-        let viewToShow = isAccountLinked ? tableView : emptyStateView
-        let viewToHide = isAccountLinked ? emptyStateView : tableView
+    private func updateUIForLinkStatus(animated: Bool) {
+        let show = isAccountLinked ? tableView : emptyStateView
+        let hide = isAccountLinked ? emptyStateView : tableView
         
-        // Animate the transition
-        UIView.transition(with: self.view, duration: 0.3, options: .transitionCrossDissolve, animations: {
-            viewToShow.isHidden = false
-            viewToHide.isHidden = true
-        })
+        let changes = {
+            show.isHidden = false
+            hide.isHidden = true
+        }
         
-        // Reload data if the table is now visible
+        if animated {
+            UIView.transition(
+                with: view,
+                duration: 0.3,
+                options: .transitionCrossDissolve,
+                animations: changes
+            )
+        } else {
+            changes()
+        }
+        
         if isAccountLinked {
             tableView.reloadData()
         }
@@ -145,6 +163,9 @@ final class LinkedAccountsViewController: UIViewController {
             
             switch result {
             case .success:
+                // 1) Update Firestore (you already do that in your /remove_item endpoint)
+                // 2) Notify the home screen to refresh
+                NotificationCenter.default.post(name: .bankLinkChanged, object: nil)
                 // This part remains the same. The Firestore listener will handle the UI update.
                 print("Unlink successful. Firestore listener will update UI.")
                 
@@ -174,8 +195,11 @@ final class LinkedAccountsViewController: UIViewController {
     
     private func startPlaidLinkFlow() {
         PlaidService.shared.startPlaidLink(from: self, onSuccess: { [weak self] in
-            // Again, no need to manually set isAccountLinked. The listener handles it.
-            print("Plaid Link successful. Firestore listener will update UI.")
+            guard let self = self else { return }
+            // 1) Firestore is updated in exchange_public_token
+            // 2) Now tell home screen to reload
+            NotificationCenter.default.post(name: .bankLinkChanged, object: nil)
+            print("Link successful. Refresh posted.")
             
         }, onError: { error in
             print("Plaid Link flow failed: \(error)")
@@ -184,13 +208,13 @@ final class LinkedAccountsViewController: UIViewController {
     
     // MARK: – Coordination
     
-//    private func notifyHomeToRefresh() {
-//        // This is still a good idea to have, in case the user navigates back quickly.
-//        if let nav = navigationController,
-//           let homeVC = nav.viewControllers.first(where: { $0 is AccountsViewController }) as? AccountsViewController {
-//            homeVC.needsRefresh = true
-//        }
-//    }
+    //    private func notifyHomeToRefresh() {
+    //        // This is still a good idea to have, in case the user navigates back quickly.
+    //        if let nav = navigationController,
+    //           let homeVC = nav.viewControllers.first(where: { $0 is AccountsViewController }) as? AccountsViewController {
+    //            homeVC.needsRefresh = true
+    //        }
+    //    }
 }
 
 // MARK: - UITableViewDataSource, UITableViewDelegate

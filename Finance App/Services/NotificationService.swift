@@ -160,4 +160,9 @@ extension Date {
     var twoDaysBefore: Date { Calendar.current.date(byAdding: .day, value: -2, to: self)! }
 }
 
+extension Notification.Name {
+  static let bankLinkChanged = Notification.Name("bankLinkChanged")
+}
+
+
 

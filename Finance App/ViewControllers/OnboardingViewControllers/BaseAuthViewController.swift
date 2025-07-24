@@ -14,10 +14,11 @@ import CryptoKit
 import FirebaseCore
 
 // MARK: - BaseAuthViewController
-class BaseAuthViewController: UIViewController {
+class BaseAuthViewController: UIViewController, UITextFieldDelegate {
 
     // MARK: - Properties
     fileprivate var currentNonce: String?
+    private var originalButtonTitle: String?
     
     // To be configured by subclasses
     var primaryButton: PrimaryButton!
@@ -88,6 +89,23 @@ class BaseAuthViewController: UIViewController {
         setupCommonConstraints()
         setupSocialButtonTargets()
     }
+    
+    override func viewDidAppear(_ animated: Bool) {
+      super.viewDidAppear(animated)
+        // wire up Next/Done
+        configureTextFieldNavigation()
+      // Autofocus
+      textFields.first?.textField.becomeFirstResponder()
+    }
+
+    
+    private func configureTextFieldNavigation() {
+        for (idx, authTF) in textFields.enumerated() {
+          let tf = authTF.textField
+          tf.delegate = self
+          tf.returnKeyType = (idx == textFields.count - 1) ? .done : .next
+        }
+      }
 
     // MARK: - Common Setup
     private func setupCommonUI() {
@@ -196,17 +214,27 @@ class BaseAuthViewController: UIViewController {
     }
 
     // MARK: - Helpers
-    func setLoading(_ isLoading: Bool) {
-        DispatchQueue.main.async {
-            self.primaryButton?.isEnabled = !isLoading
-            self.appleSignInButton.isEnabled = !isLoading
-            self.googleSignInButton.isEnabled = !isLoading
-            self.textFields.forEach { $0.isUserInteractionEnabled = !isLoading }
-            
-            let buttonTitle = isLoading ? "Loading..." : self.primaryButton?.title(for: .normal)
-            self.primaryButton?.setTitle(buttonTitle, for: .normal)
+    func setLoading(_ loading: Bool) {
+      DispatchQueue.main.async {
+        // 1) Capture the button’s title the *first* time we go into loading
+        if self.originalButtonTitle == nil {
+          self.originalButtonTitle = self.primaryButton?.title(for: .normal)
         }
+
+        // 2) Decide which title to show
+        let titleToShow = loading
+          ? "Loading..."
+          : (self.originalButtonTitle ?? "")
+
+        // 3) Apply the title and enable/disable
+        self.primaryButton?.setTitle(titleToShow, for: .normal)
+        self.primaryButton?.isEnabled = !loading
+        self.appleSignInButton.isEnabled = !loading
+        self.googleSignInButton.isEnabled = !loading
+        self.textFields.forEach { $0.isUserInteractionEnabled = !loading }
+      }
     }
+
 
     func presentAlert(title: String, message: String) {
         DispatchQueue.main.async {
@@ -289,4 +317,21 @@ extension BaseAuthViewController: ASAuthorizationControllerDelegate, ASAuthoriza
         setLoading(false)
         presentAlert(title: "Apple Sign-In Failed", message: error.localizedDescription)
     }
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        guard let index = textFields.firstIndex(where: { $0.textField === textField }) else {
+          textField.resignFirstResponder()
+          return true
+        }
+
+        let nextIndex = index + 1
+        if nextIndex < textFields.count {
+          // Move to the next field
+          textFields[nextIndex].textField.becomeFirstResponder()
+        } else {
+          // Last field: dismiss keyboard and trigger the primary action
+          textField.resignFirstResponder()
+          primaryButton?.sendActions(for: .touchUpInside)
+        }
+        return true
+      }
 }

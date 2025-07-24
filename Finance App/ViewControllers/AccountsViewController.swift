@@ -23,9 +23,8 @@ class AccountsViewController: UIViewController {
     
     // MARK: – Data Properties
     private var summaries: [AccountSummary] = []//list of account summaries (fetched from backend)
-    var needsRefresh = true// Tracks whether we need to re‐fetch the cards
+    private var listener: ListenerRegistration?
     private var placeholderButton: UIButton?// If no accounts exist yet, we show a placeholder “Connect Bank” button
-    private var isLoading = false
     
     // MARK: – Lifecycle
     override func viewDidLoad() {
@@ -36,8 +35,6 @@ class AccountsViewController: UIViewController {
         
         configureHeader()
         configureScrollView()
-        refreshControl.addTarget(self, action: #selector(refreshData), for: .valueChanged)
-        scrollView.addSubview(refreshControl)
         configureStackView()
         configureFloatingButton()
         setupActions()
@@ -45,18 +42,27 @@ class AccountsViewController: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        // 1) Always hide the stock nav‑bar before laying out your custom header
         navigationController?.setNavigationBarHidden(true, animated: animated)
-        
-        if needsRefresh {
-            fetchData()
-        }
-    }
-    
-    override func viewWillDisappear(_ animated: Bool) {
+
+        // 2) (Re)attach your Firestore listener so you get live updates
+        attachListener()
+      }
+
+      override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        // When leaving this screen, restore the nav bar for downstream VCs
+        // 1) Restore the nav‑bar so downstream VCs get the standard bar
         navigationController?.setNavigationBarHidden(false, animated: animated)
-    }
+
+        // 2) Cleanup the listener
+        listener?.remove()
+        listener = nil
+
+        // 3) If the user was mid‑pull‑to‑refresh, cancel it
+        if refreshControl.isRefreshing {
+          refreshControl.endRefreshing()
+        }
+      }
     
     // MARK: – UI Configuration
     private func configureHeader() {// Configures and constrains the custom headerView.
@@ -78,18 +84,27 @@ class AccountsViewController: UIViewController {
         
     }
     
-    private func configureScrollView() {// Configures and constrains the scrollView below the header
-        view.addSubview(scrollView)
-        scrollView.alwaysBounceVertical = true
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        
-        NSLayoutConstraint.activate([
+        private func configureScrollView() {// Configures and constrains the scrollView below the header
+          view.addSubview(scrollView)
+          scrollView.alwaysBounceVertical = true
+          scrollView.translatesAutoresizingMaskIntoConstraints = false
+
+          // ← Preferred, since iOS 10:
+          if #available(iOS 10.0, *) {
+            scrollView.refreshControl = refreshControl
+          } else {
+            scrollView.addSubview(refreshControl)
+          }
+          refreshControl.addTarget(self, action: #selector(refreshData), for: .valueChanged)
+
+          NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
-        ])
-    }
+          ])
+        }
+
     
     private func configureStackView() {// Configures the vertical stackView inside the scrollView
         // Configure the stack
@@ -156,83 +171,68 @@ class AccountsViewController: UIViewController {
     // MARK: – Data Loading
     
     @objc private func refreshData() {
-        fetchData()
+        // We just tell the server to sync transactions.
+        // Our listener will automatically pick up any changes to the summaries.
+        DataService.loadTransactions(period: "month") { _ in
+            // We don't need to do anything in the completion handler.
+            self.refreshControl.endRefreshing()
+        }
     }
     
-    /// Check Firestore for saved access token
-    /// If found, save locally and load summaries
-    /// Otherwise show a “Connect Bank” placeholder.
-    private func fetchData() {
-        isLoading = true
-        showSkeletonCards()
-        
+    /// Attaches a real-time listener to the user document to get live summary updates.
+    // In AccountsViewController.swift
+
+    /// Attaches a real-time listener to the user document to get live summary updates.
+    private func attachListener() {
         guard let uid = Auth.auth().currentUser?.uid else {
             showPlaceholder(message: "Please sign in.")
             return
         }
+        showSkeletonCards()
         
         let docRef = Firestore.firestore().collection("users").document(uid)
-        docRef.getDocument { [weak self] document, error in
-            guard let self = self, let document = document, document.exists else {
-                self?.showPlaceholder(message: "An error occurred.")
-                self?.refreshControl.endRefreshing()
+        listener = docRef.addSnapshotListener { [weak self] documentSnapshot, error in
+            guard let self = self else { return }
+            
+            self.refreshControl.endRefreshing()
+            
+            if let error = error {
+                print("Firestore listener error: \(error.localizedDescription)")
+                self.showPlaceholder(message: "Could not connect.")
                 return
             }
             
-            let isBankConnected = document.data()?["isBankConnected"] as? Bool ?? false
-            if isBankConnected {
-                self.loadSummaries()
-            } else {
-                self.showPlaceholder(message: "Connect your bank to get started.")
+            guard let document = documentSnapshot, document.exists else {
+                print("User document does not exist.")
+                self.showPlaceholder(message: "An error occurred.")
+                return
+            }
+            
+            // This is a much safer way to decode.
+            // We first check if the 'accountSummaries' field exists at all.
+            guard let userData = document.data(), let _ = userData["accountSummaries"] else {
+                self.showPlaceholder(message: "Syncing your accounts...")
+                // The backend hasn't generated the summaries yet. We need to ask for them.
+                // We use the refreshData function to do this.
+                self.refreshData()
+                return
+            }
+            
+            // Now that we know the field exists, we can safely decode.
+            do {
+                self.summaries = try document.data(as: UserData.self).accountSummaries ?? []
+                self.stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+                self.placeholderButton?.removeFromSuperview()
+                self.populateCards()
+                
+            } catch {
+                print("Error decoding user data from Firestore: \(error)")
+                self.showPlaceholder(message: "Could not load accounts.")
             }
         }
     }
     
-    /// Remove “Connect Bank” button, fetch from backend, then render cards
-    private func loadSummaries() {
-        placeholderButton?.removeFromSuperview()
-        placeholderButton = nil
-        stackView.alignment = .fill
-        
-        // Call the new, simple, and secure DataService function.
-        DataService.loadSummaries { [weak self] result in
-            guard let self = self else { return }
-            
-            self.isLoading = false
-            self.needsRefresh = false
-            self.stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
-            
-            switch result {
-            case .success(let summaries):
-                self.summaries = summaries
-                self.populateCards()
-                HapticsManager.trigger(.medium)
-                // Now that summaries are loaded, also fetch recent transactions
-                            // to ensure the widget gets updated.
-                            let endDate = Date()
-                            guard let startDate = Calendar.current.date(byAdding: .day, value: -7, to: endDate) else { return }
-                            let formatter = ISO8601DateFormatter()
-                            
-                            DataService.loadTransactions(
-                                startDate: formatter.string(from: startDate),
-                                endDate: formatter.string(from: endDate)
-                            ) { _ in
-                                // We don't need to do anything with the result here,
-                                // because the widget logic is handled inside DataService.
-                                print("Transactions fetched for widget update.")
-                            }
-                            // ---------------------
-
-                        case .failure(let error):
-                            print("❌ Failed to load summaries:", error)
-                        }
-                        self.refreshControl.endRefreshing()
-                    }
-                }
-    
     private func showPlaceholder(message: String) {
-        isLoading = false
-        needsRefresh = false
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
         placeholderButton?.removeFromSuperview()
         refreshControl.endRefreshing()
@@ -248,6 +248,8 @@ class AccountsViewController: UIViewController {
             button.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
         ])
     }
+    
+    
     
     // MARK: – UI Population
     private func populateCards() {
@@ -293,19 +295,17 @@ class AccountsViewController: UIViewController {
     /// The new, correct action for the "Connect Bank" placeholder button.
     @objc private func startPlaidLinkFlow() {
         PlaidService.shared.startPlaidLink(from: self) { [weak self] in
-          guard let self = self else { return }
-          let uid = Auth.auth().currentUser!.uid
-          Firestore.firestore()
-            .collection("users")
-            .document(uid)
-            .setData(["isBankConnected": true], merge: true) { error in
-              if let error = error {
-                print("couldn’t mark bank connected:", error)
-                return
-              }
-              self.needsRefresh = true
-              self.fetchData()
-          }
+            guard let self = self else { return }
+            let uid = Auth.auth().currentUser!.uid
+            Firestore.firestore()
+                .collection("users")
+                .document(uid)
+                .setData(["isBankConnected": true], merge: true) { error in
+                    if let error = error {
+                        print("couldn’t mark bank connected:", error)
+                        return
+                    }
+                }
         } onError: { error in
             print("Plaid Link flow failed:", error)
         }

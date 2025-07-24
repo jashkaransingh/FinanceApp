@@ -16,7 +16,7 @@ struct Transaction: Codable, Hashable {
     let category: String
 }
 
-struct AccountSummary: Decodable {
+struct AccountSummary: Codable {
     let periodTitle: String      // e.g. "Spent Today"
     let amount: Double           // e.g. 64.30
     let percentage: Double       // e.g. -11 (negative = down)

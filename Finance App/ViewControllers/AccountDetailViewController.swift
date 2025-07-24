@@ -6,6 +6,8 @@
 //
 
 import UIKit
+import FirebaseAuth
+import FirebaseFirestore
 
 class AccountDetailViewController: UIViewController {
     // MARK: – Public API
@@ -15,6 +17,7 @@ class AccountDetailViewController: UIViewController {
     private let tableView = UITableView()
     private var transactions: [Transaction] = []
     private var isLoading = true
+    private var hasAnimatedInitialCells = false
     
     private static let isoDateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -30,6 +33,12 @@ class AccountDetailViewController: UIViewController {
         configureNavigationBar()
         configureTableView()
         loadTransactions()
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Reset the flag so you get one entrance animation each time
+        hasAnimatedInitialCells = false
     }
     
     private func configureNavigationBar() {
@@ -73,11 +82,9 @@ class AccountDetailViewController: UIViewController {
     
     /// Computes date range, fetches transactions, and reloads the table.
     private func loadTransactions() {
-        guard let per = period else {
+        guard let per = period, let uid = Auth.auth().currentUser?.uid else {
             // Handle case where period is not set, maybe show an error
             print("Error: AccountDetailViewController requires a period to be set.")
-            self.isLoading = false
-            self.tableView.reloadData()
             return
         }
         
@@ -85,26 +92,27 @@ class AccountDetailViewController: UIViewController {
         tableView.reloadData()
         
         let (start, end) = dateRange(for: per)
-        let startStr = AccountDetailViewController.isoDateFormatter.string(from: start)
-        let endStr   = AccountDetailViewController.isoDateFormatter.string(from: end)
         
-        // Call the new, secure DataService function. No access token needed.
-        DataService.loadTransactions(startDate: startStr, endDate: endStr) { [weak self] result in
-            guard let self = self else { return }
-            
-            // Give a little delay for a smoother UI feel with the shimmer.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                self.isLoading = false
-                switch result {
-                case .success(let transactions):
-                    self.transactions = transactions
-                case .failure(let error):
-                    print("❌ Failed to load detail transactions:", error)
-                    self.transactions = [] // Clear data on failure
+        let query = Firestore.firestore()
+                .collection("users").document(uid).collection("transactions")
+                .whereField("date", isGreaterThanOrEqualTo: start.iso8601Format())
+                .whereField("date", isLessThanOrEqualTo: end.iso8601Format())
+                .order(by: "date", descending: true)
+
+            query.getDocuments { [weak self] snapshot, error in
+                guard let self = self else { return }
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    self.isLoading = false
+                    if let snapshot = snapshot, error == nil {
+                        self.transactions = snapshot.documents.compactMap { try? $0.data(as: Transaction.self) }
+                    } else {
+                        print("❌ Failed to load detail transactions from Firestore:", error ?? "Unknown error")
+                        self.transactions = []
+                    }
+                    self.tableView.reloadData()
                 }
-                self.tableView.reloadData()
             }
-        }
     }
     
     /// Returns start and end `Date` for the given period.
@@ -198,17 +206,36 @@ extension AccountDetailViewController: UITableViewDelegate {
         forRowAt indexPath: IndexPath
     ) {
         // Fade-in animation
+        guard !isLoading else { return }            // keep your loading guard
+        guard !hasAnimatedInitialCells else {        // skip animation after first run
+            cell.alpha = 1
+            cell.transform = .identity
+            return
+        }
+        
+        // Do the fade‑in
         cell.alpha = 0
         cell.transform = CGAffineTransform(translationX: 0, y: 20)
         UIView.animate(
             withDuration: 0.4,
             delay: 0.05 * Double(indexPath.row),
-            options: [.curveEaseOut],
-            animations: {
-                cell.alpha = 1
-                cell.transform = .identity
+            options: [.curveEaseOut]
+        ) {
+            cell.alpha = 1
+            cell.transform = .identity
+        } completion: { _ in
+            // When the last visible row is done, flip the flag
+            if indexPath.row == (tableView.numberOfRows(inSection: indexPath.section) - 1) {
+                self.hasAnimatedInitialCells = true
             }
-        )
+        }
+    }
+}
+extension Date {
+    func iso8601Format() -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        return formatter.string(from: self)
     }
 }
 
