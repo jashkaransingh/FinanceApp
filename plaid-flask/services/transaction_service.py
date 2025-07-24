@@ -3,7 +3,6 @@ from firebase_admin import firestore
 import traceback
 
 from plaid_client import fetch_all_transactions
-from . import update_account_summaries
 
 
 def get_transactions(uid: str, start_date: date, end_date: date) -> list:
