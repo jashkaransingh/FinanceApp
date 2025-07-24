@@ -3,6 +3,8 @@ from firebase_admin import firestore
 import traceback
 
 from plaid_client import fetch_all_transactions
+from . import update_account_summaries
+
 
 def get_transactions(uid: str, start_date: date, end_date: date) -> list:
     """
@@ -66,6 +68,7 @@ def sync_transactions_for_item(uid: str, start_date: date = None, end_date: date
         
         batch.commit()
         print(f"✅ Service: Synced and saved {len(plaid_transactions)} transactions to Firestore for user {uid}")
+        update_account_summaries(uid)
 
         # Re-format the data for the client if needed
         client_transactions = [
@@ -80,3 +83,67 @@ def sync_transactions_for_item(uid: str, start_date: date = None, end_date: date
     except Exception as e:
         traceback.print_exc()
         return []
+    
+def update_account_summaries(uid):
+    """
+    Calculates user's spending summaries from Firestore data and saves them
+    back to the main user document. This should be called after any
+    transaction sync.
+    """
+    print(f"🔥 Triggering summary update for user: {uid}")
+    db = firestore.client()
+    
+    # 1. Define the date ranges needed for calculation.
+    today = date.today()
+    sixty_days_ago = today - timedelta(days=60)
+    
+    # 2. Fetch the last 60 days of transactions directly from Firestore.
+    #    This is much faster and cheaper than calling the Plaid API again.
+    transactions_ref = db.collection('users').document(uid).collection('transactions')
+    query = transactions_ref.where('date', '>=', sixty_days_ago.isoformat())
+    docs = query.stream()
+
+    # 3. Process the transactions in memory (reusing your existing logic).
+    today_total = 0
+    yesterday_total = 0
+    this_week_total = 0
+    last_week_total = 0
+    this_month_total = 0
+    last_month_total = 0
+
+    yesterday = today - timedelta(days=1)
+    week_ago = today - timedelta(days=7)
+    two_weeks_ago = today - timedelta(days=14)
+    month_ago = today - timedelta(days=30)
+
+    for doc in docs:
+        t = doc.to_dict()
+        t_date = date.fromisoformat(t['date'])
+        t_amount = t.get('amount', 0)
+
+        if t_amount < 0: continue
+        
+        if t_date == today: today_total += t_amount
+        if t_date == yesterday: yesterday_total += t_amount
+        if week_ago <= t_date <= today: this_week_total += t_amount
+        if two_weeks_ago <= t_date < week_ago: last_week_total += t_amount
+        if month_ago <= t_date <= today: this_month_total += t_amount
+        if sixty_days_ago <= t_date < month_ago: last_month_total += t_amount
+
+    # 4. Calculate percentages (reusing your existing logic).
+    pct_today = ((today_total - yesterday_total) / yesterday_total * 100) if yesterday_total > 0 else 0
+    pct_week = ((this_week_total - last_week_total) / last_week_total * 100) if last_week_total > 0 else 0
+    pct_month = ((this_month_total - last_month_total) / last_month_total * 100) if last_month_total > 0 else 0
+
+    # 5. Build the payload.
+    summary_payload = [
+        {"periodTitle": "Spent Today", "amount": round(today_total, 2), "percentage": round(pct_today, 1), "subtitle": f"Yesterday ${yesterday_total:.2f}", "usesPieIcon": False},
+        {"periodTitle": "Spent This Week", "amount": round(this_week_total, 2), "percentage": round(pct_week, 1), "subtitle": f"Last Week ${last_week_total:.2f}", "usesPieIcon": False},
+        {"periodTitle": "Spent This Month", "amount": round(this_month_total, 2), "percentage": round(pct_month, 1), "subtitle": f"Last Month ${last_month_total:.2f}", "usesPieIcon": True}
+    ]
+    
+    # 6. Save this payload to the main user document.
+    user_ref = db.collection('users').document(uid)
+    user_ref.update({"accountSummaries": summary_payload})
+    
+    print(f"✅ Successfully updated summaries for user: {uid}")

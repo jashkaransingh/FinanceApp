@@ -3,6 +3,7 @@
 import os
 import json
 import traceback
+import hashlib
 from flask import Blueprint, request, jsonify, current_app
 from firebase_admin import auth, firestore
 from utils.gemini_client import call_gemini
@@ -102,6 +103,9 @@ def weekly_summary():
     transactions = data.get("transactions", [])
     history = "\n".join(f"- {tx['name']}: ${tx['amount']:.2f}" for tx in transactions)
     total_budget = data.get("total_budget") or data.get("weekly_budget", 100)
+
+    tx_string = json.dumps(transactions, sort_keys=True)
+    tx_hash = hashlib.md5(tx_string.encode()).hexdigest()
     
     base_prompt = f"""
     You are a helpful budgeting assistant. Given the following transaction history and a total weekly budget of ${total_budget}, create a suggested spending plan.
@@ -113,7 +117,7 @@ def weekly_summary():
     
     # The cache key needs to uniquely identify the request.
     # We start with the user's secure ID and their total budget.
-    cache_key_parts = [uid, str(total_budget)]
+    cache_key_parts = [uid, str(total_budget), tx_hash]
 
     if "locked_category" in data:
         # Reallocation Flow

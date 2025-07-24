@@ -3,7 +3,7 @@ from firebase_admin import firestore
 import traceback
 
 # We will import and use a new service function we are about to create.
-from services.transaction_service import sync_transactions_for_item
+from services.transaction_service import sync_transactions_for_item, update_account_summaries
 
 webhook_bp = Blueprint("webhook", __name__)
 
@@ -40,15 +40,17 @@ def plaid_webhook():
     if webhook_code == 'SYNC_UPDATES_AVAILABLE':
         print(f"🔄 Sync updates available for item: {item_id}")
         
-        # 1. Find which of our users this update belongs to.
         uid = find_user_by_item_id(item_id)
         
         if uid:
-            # 2. If we found a user, trigger a transaction sync for them.
+            # 1. Sync new transactions (this is your existing call).
             print(f"Found user {uid} for item {item_id}. Triggering sync.")
             sync_transactions_for_item(uid)
+            
+            # 2. ADD THIS LINE: Immediately update the summaries.
+            update_account_summaries(uid)
+            
         else:
             print(f"⚠️ Could not find user for item_id: {item_id}")
 
-    # It's critical to always respond with a 200 OK to Plaid
     return jsonify(status='ok')

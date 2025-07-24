@@ -1,32 +1,43 @@
+# utils/cache_manager.py
 import json
 import os
-from datetime import datetime
+import time
 
-CACHE_FILE = "ai_weekly_cache.json"  # This will be created in your Flask root dir
-
-def get_current_week_key():
-    today = datetime.today()
-    return f"{today.year}-W{today.isocalendar()[1]}"
+CACHE_FILE = "ai_cache.json"
+CACHE_TTL_SECONDS = 86400  # Cache entries expire after 24 hours
 
 def load_cache():
-    if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, "r") as f:
+    if not os.path.exists(CACHE_FILE):
+        return {}
+    with open(CACHE_FILE, "r") as f:
+        try:
             return json.load(f)
-    return {}
+        except json.JSONDecodeError:
+            return {}
 
 def save_cache(cache):
     with open(CACHE_FILE, "w") as f:
         json.dump(cache, f, indent=2)
 
-def get_cached_summary(user_id):
+def get_cached_summary(key):
     cache = load_cache()
-    week_key = get_current_week_key()
-    return cache.get(user_id, {}).get(week_key)
+    entry = cache.get(key)
+    
+    if not entry:
+        return None # Not in cache
+    
+    # Check if the cache entry has expired
+    if time.time() - entry.get("timestamp", 0) > CACHE_TTL_SECONDS:
+        print(f"Cache expired for key: {key}")
+        return None # Expired
+        
+    print(f"✅ Cache hit for key: {key}")
+    return entry.get("data")
 
-def set_cached_summary(user_id, suggestion):
+def set_cached_summary(key, suggestion):
     cache = load_cache()
-    week_key = get_current_week_key()
-    if user_id not in cache:
-        cache[user_id] = {}
-    cache[user_id][week_key] = suggestion
+    cache[key] = {
+        "timestamp": time.time(),
+        "data": suggestion
+    }
     save_cache(cache)
