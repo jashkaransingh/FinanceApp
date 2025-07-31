@@ -18,6 +18,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
+        _ = NetworkMonitor.shared
         UINavigationBar.appearance().prefersLargeTitles = true
         FirebaseApp.configure()
         
@@ -45,16 +46,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     
     /// Sets the default values for notification toggles to ON the first time the app is run.
     private func registerDefaultNotificationSettings() {
-        // FIX: Create placeholder instances of the enum to access their properties.
-        // We provide dummy data for the context just to create the instance.
-        let defaults: [String: Any] = [
-            NotificationType.dailySummary(context: .init(spentYesterday: 0, spentDayBefore: 0)).userDefaultsKey!: true,
-            NotificationType.weeklySummary.userDefaultsKey!: true,
-            NotificationType.weekendAlert.userDefaultsKey!: true,
-            // For budget alerts, we use the same key, so we only need one of the cases.
-            NotificationType.budgetNearLimit(context: .init(category: "", percent: nil)).userDefaultsKey!: true
-        ]
-        
+        var defaults: [String: Any] = [:]
+        // We can now loop through our settings without creating dummy notifications!
+        for setting in NotificationSetting.allCases {
+            defaults[setting.key] = true
+        }
         UserDefaults.standard.register(defaults: defaults)
     }
     

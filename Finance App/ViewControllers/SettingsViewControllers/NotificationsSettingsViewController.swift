@@ -54,7 +54,7 @@ final class NotificationsSettingsViewController: UITableViewController {
     
     private func buildSections() {
         let dailySummaryPlaceholder = NotificationType.dailySummary(context: .init(spentYesterday: 0, spentDayBefore: 0))
-        let dailySummaryEnabled = UserDefaults.standard.bool(forKey: dailySummaryPlaceholder.userDefaultsKey!)
+        let dailySummaryEnabled = UserDefaults.standard.bool(forKey: NotificationSetting.dailySummary.key)
         
         var summaryRows: [Row] = [
             .toggle(icon: "calendar.day.timeline.left", title: "Daily Summary", subtitle: "A look at yesterday's spending.", type: dailySummaryPlaceholder),
@@ -106,8 +106,8 @@ final class NotificationsSettingsViewController: UITableViewController {
 extension NotificationsSettingsViewController: ToggleCellDelegate, TimePickerCellDelegate {
     
     func didToggleSwitch(for type: NotificationType, isOn: Bool) {
-        guard let key = type.userDefaultsKey else { return }
-        UserDefaults.standard.set(isOn, forKey: key)
+        guard let setting = type.setting else { return }
+        UserDefaults.standard.set(isOn, forKey: setting.key)
         
         if isOn {
             if case .dailySummary = type {
@@ -163,8 +163,8 @@ class ToggleCell: UITableViewCell {
         iconImageView.image = UIImage(systemName: icon)
         titleLabel.text = title
         subtitleLabel.text = subtitle
-        if let key = type.userDefaultsKey {
-            toggle.isOn = UserDefaults.standard.bool(forKey: key)
+        if let setting = type.setting {
+            toggle.isOn = UserDefaults.standard.bool(forKey: setting.key)
         }
         selectionStyle = .none
     }

@@ -20,6 +20,17 @@ struct BudgetContext {
 }
 
 // MARK: - NotificationType Enum (Refactored)
+enum NotificationSetting: String, CaseIterable {
+    case dailySummary
+    case weeklySummary
+    case weekendAlerts
+    case budgetAlerts
+
+    var key: String {
+        return self.rawValue + "Enabled"
+    }
+}
+
 enum NotificationType {
     case dailySummary(context: DailySummaryContext)
     case weeklySummary
@@ -37,12 +48,12 @@ enum NotificationType {
         }
     }
     
-    var userDefaultsKey: String? {
+    var setting: NotificationSetting? {
         switch self {
-        case .dailySummary: return "dailySummaryEnabled"
-        case .weeklySummary: return "weeklySummaryEnabled"
-        case .weekendAlert: return "weekendAlertsEnabled"
-        case .budgetNearLimit, .budgetFinished: return "budgetAlertsEnabled"
+        case .dailySummary: return .dailySummary
+        case .weeklySummary: return .weeklySummary
+        case .weekendAlert: return .weekendAlerts
+        case .budgetNearLimit, .budgetFinished: return .budgetAlerts
         }
     }
     
@@ -99,7 +110,7 @@ final class NotificationService {
     }
     
     func scheduleNotification(for type: NotificationType, at components: DateComponents? = nil) {
-        if let key = type.userDefaultsKey, !UserDefaults.standard.bool(forKey: key) { return }
+        if let setting = type.setting, !UserDefaults.standard.bool(forKey: setting.key) { return }
         let content = type.content
         
         switch type {

@@ -8,32 +8,103 @@
 import Foundation
 import FirebaseAuth
 import FirebaseFirestore
-import AuthenticationServices // Import for Apple Sign-In types
+import AuthenticationServices
 
 class AuthService {
     
-    // --- Existing Methods (Unchanged) ---
+    public enum AuthError: Error {
+        case userNotFound         // login: no account with that email
+        case wrongPassword        // login: password was incorrect
+        case emailAlreadyInUse    // signup: account already exists
+        case weakPassword         // signup: password fails strength rules
+        case networkError         // underlying network request failed
+        case profileSaveFailed(Error)
+        case unknown(String)      // catch‑all for other error messages
+    }
     
-    static func signIn(email: String, password: String, completion: @escaping (Bool) -> Void) {
-        Auth.auth().signIn(withEmail: email, password: password) { _, error in
-            completion(error == nil)
+    static func signIn(email: String,
+                       password: String,
+                       completion: @escaping (Result<Void, AuthError>) -> Void) {
+        // Note the fully‑qualified FirebaseAuth.Auth.auth()
+        FirebaseAuth.Auth.auth().signIn(withEmail: email, password: password) { authResult, error in
+            // If Firebase gave us back an error, map it to AuthError
+            if let nsError = error as NSError? {
+                let authErr: AuthError
+                switch nsError.code {
+                case AuthErrorCode.userNotFound.rawValue:
+                    authErr = .userNotFound
+                case AuthErrorCode.wrongPassword.rawValue:
+                    authErr = .wrongPassword
+                case AuthErrorCode.networkError.rawValue:
+                    authErr = .networkError
+                default:
+                    authErr = .unknown(nsError.localizedDescription)
+                }
+                completion(.failure(authErr))
+            } else {
+                // no error → success
+                completion(.success(()))
+            }
         }
     }
     
-    static func register(email: String, password: String, name: String, completion: @escaping (Bool) -> Void) {
-        Auth.auth().createUser(withEmail: email, password: password) { result, error in
-            guard let user = result?.user, error == nil else {
-                completion(false)
+    
+    
+    static func register(email: String,
+                         password: String,
+                         name: String,
+                         completion: @escaping (Result<Void, AuthError>) -> Void) {
+        FirebaseAuth.Auth.auth().createUser(withEmail: email, password: password) { result, error in
+            // If Firebase returned an error, map to AuthError:
+            if let nsError = error as NSError? {
+                let authErr: AuthError
+                switch nsError.code {
+                case AuthErrorCode.emailAlreadyInUse.rawValue:
+                    authErr = .emailAlreadyInUse
+                case AuthErrorCode.weakPassword.rawValue:
+                    authErr = .weakPassword
+                case AuthErrorCode.networkError.rawValue:
+                    authErr = .networkError
+                default:
+                    authErr = .unknown(nsError.localizedDescription)
+                }
+                completion(.failure(authErr))
                 return
             }
-            // Use the new helper to save user data
-            saveUserProfile(user: user, name: name, email: email, completion: completion)
+            
+            // We got a new user object
+            guard let user = result?.user else {
+                completion(.failure(.unknown("Could not retrieve created user")))
+                return
+            }
+            
+            // Save their profile in Firestore, then forward that result
+            saveUserProfile(user: user, name: name, email: email) { saveResult in
+                switch saveResult {
+                case .success:
+                    // Profile write succeeded → done.
+                    completion(.success(()))
+                    
+                case .failure(let saveError):
+                    // Profile write failed → delete the just‐created Auth user to avoid a “ghost” account
+                    if let createdUser = Auth.auth().currentUser {
+                        createdUser.delete { _ in
+                            // Even if delete itself errors, bubble up the original saveError
+                            completion(.failure(saveError))
+                        }
+                    } else {
+                        // No currentUser? Just forward the profile‐save error
+                        completion(.failure(saveError))
+                    }
+                }
+            }
         }
     }
+    
+    
     
     static func signOut() {
         try? Auth.auth().signOut()
-        UserDefaults.standard.removeObject(forKey: "plaidAccessToken")
     }
     
     static func isSignedIn() -> Bool {
@@ -49,78 +120,130 @@ class AuthService {
     // MARK: - New Social Sign-In Methods
     
     /// Signs the user into Firebase using an Apple ID credential.
-    static func signInWithApple(credential: ASAuthorizationAppleIDCredential, nonce: String?, completion: @escaping (Bool) -> Void) {
-        guard let appleIDToken = credential.identityToken,
-              let idTokenString = String(data: appleIDToken, encoding: .utf8) else {
-            print("ERROR: Unable to get idTokenString from Apple credential")
-            completion(false)
+    static func signInWithApple(
+        credential: ASAuthorizationAppleIDCredential,
+        nonce: String?,
+        completion: @escaping (Result<Void, AuthError>) -> Void
+    ) {
+        // 1) Extract the ID token string
+        guard
+            let appleIDToken = credential.identityToken,
+            let idTokenString = String(data: appleIDToken, encoding: .utf8)
+        else {
+            completion(.failure(.unknown("Invalid Apple credential")))
             return
         }
         
+        // 2) Build the Firebase credential
         let firebaseCredential = OAuthProvider.appleCredential(
             withIDToken: idTokenString,
             rawNonce: nonce,
             fullName: credential.fullName
         )
         
-        Auth.auth().signIn(with: firebaseCredential) { authResult, error in
-            guard let authResult = authResult, error == nil else {
-                print("ERROR: Firebase sign-in with Apple failed. \(error?.localizedDescription ?? "")")
-                completion(false)
+        // 3) Sign in with Firebase
+        FirebaseAuth.Auth.auth().signIn(with: firebaseCredential) { authResult, error in
+            // Error path: map NSError → AuthError
+            if let nsError = error as NSError? {
+                let authErr: AuthError
+                switch nsError.code {
+                case AuthErrorCode.invalidCredential.rawValue:
+                    authErr = .unknown("Invalid Apple credential")
+                case AuthErrorCode.networkError.rawValue:
+                    authErr = .networkError
+                default:
+                    authErr = .unknown(nsError.localizedDescription)
+                }
+                completion(.failure(authErr))
                 return
             }
             
-            // Check if this is a new user to save their profile
-            if authResult.additionalUserInfo?.isNewUser == true {
+            // Success path: new user? save profile, else just complete
+            guard let result = authResult else {
+                completion(.failure(.unknown("No auth result")))
+                return
+            }
+            
+            if result.additionalUserInfo?.isNewUser == true {
                 let name = credential.fullName?.givenName ?? "User"
                 let email = credential.email ?? ""
-                saveUserProfile(user: authResult.user, name: name, email: email, completion: completion)
+                saveUserProfile(user: result.user, name: name, email: email) { saveResult in
+                    // forward the saveResult (which is Result<Void,AuthError>)
+                    completion(saveResult)
+                }
             } else {
-                // Existing user, sign-in successful
-                completion(true)
+                completion(.success(()))
             }
         }
     }
     
     /// Signs the user into Firebase using a Google ID token.
-    static func signInWithGoogle(idToken: String, completion: @escaping (Bool) -> Void) {
-        let firebaseCredential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: "")
+    static func signInWithGoogle(
+        idToken: String,
+        completion: @escaping (Result<Void, AuthError>) -> Void
+    ) {
+        let firebaseCredential = GoogleAuthProvider
+            .credential(withIDToken: idToken, accessToken: "")
         
-        Auth.auth().signIn(with: firebaseCredential) { authResult, error in
-            guard let authResult = authResult, error == nil else {
-                print("ERROR: Firebase sign-in with Google failed. \(error?.localizedDescription ?? "")")
-                completion(false)
+        FirebaseAuth.Auth.auth().signIn(with: firebaseCredential) { authResult, error in
+            // Error path
+            if let nsError = error as NSError? {
+                let authErr: AuthError
+                switch nsError.code {
+                case AuthErrorCode.networkError.rawValue:
+                    authErr = .networkError
+                default:
+                    authErr = .unknown(nsError.localizedDescription)
+                }
+                completion(.failure(authErr))
                 return
             }
             
-            // Check if this is a new user to save their profile
-            if authResult.additionalUserInfo?.isNewUser == true {
-                let name = authResult.user.displayName ?? "User"
-                let email = authResult.user.email ?? ""
-                saveUserProfile(user: authResult.user, name: name, email: email, completion: completion)
+            // Success: new user? save profile, else complete
+            guard let result = authResult else {
+                completion(.failure(.unknown("No auth result")))
+                return
+            }
+            
+            if result.additionalUserInfo?.isNewUser == true {
+                let name = result.user.displayName ?? "User"
+                let email = result.user.email ?? ""
+                saveUserProfile(user: result.user, name: name, email: email) { saveResult in
+                    completion(saveResult)
+                }
             } else {
-                // Existing user, sign-in successful
-                completion(true)
+                completion(.success(()))
             }
         }
     }
     
     // MARK: - Private Helper
     
-    /// Saves a new user's profile to the 'users' collection in Firestore.
-    private static func saveUserProfile(user: User, name: String, email: String, completion: @escaping (Bool) -> Void) {
-        let userData: [String: Any] = [
-            "name": name,
-            "email": email,
-            "createdAt": Timestamp()
-        ]
+    private static func saveUserProfile(user: User,
+                                        name: String,
+                                        email: String,
+                                        completion: @escaping (Result<Void, AuthError>) -> Void) {
+        // 1. Create an instance of our new Codable struct.
+        let userProfile = UserProfile(name: name, email: email, createdAt: Timestamp())
         
-        Firestore.firestore()
-            .collection("users")
-            .document(user.uid)
-            .setData(userData) { err in
-                completion(err == nil)
-            }
+        let db = Firestore.firestore()
+        
+        do {
+            // 2. Use the modern setData(from:) method to save the struct.
+            try db.collection("users")
+                .document(user.uid)
+                .setData(from: userProfile) { error in
+                    if let error = error {
+                        // We use the more specific error we created earlier!
+                        completion(.failure(.profileSaveFailed(error)))
+                    } else {
+                        completion(.success(()))
+                    }
+                }
+        } catch {
+            // This catches errors if the userProfile object can't be encoded.
+            completion(.failure(.unknown("Could not encode user profile: \(error)")))
+        }
     }
 }
 

@@ -64,7 +64,6 @@ class HistoryViewController: UIViewController {
         // --- MOVED: Detach the listener when the view is no longer visible ---
         // This is crucial for performance and to prevent memory leaks.
         listener?.remove()
-        print("Firestore listener removed.")
     }
     
     // MARK: – Configuration

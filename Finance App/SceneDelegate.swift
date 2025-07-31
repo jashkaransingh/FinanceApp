@@ -24,18 +24,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             let win = UIWindow(windowScene: windowScene)
             window = win
 
-        // 1. A new key to check if the user has ever touched the toggle.
-            let themeHasBeenSet = "userHasManuallySetTheme"
-
-            if !UserDefaults.standard.bool(forKey: themeHasBeenSet) {
-                // If the user has NEVER set a theme, sync the toggle with the system.
-                let isSystemDark = win.traitCollection.userInterfaceStyle == .dark
-                UserDefaults.standard.set(isSystemDark, forKey: "isDarkModeManuallySet")
-            }
-
-            // 2. Now apply the theme using the (now correct) stored value.
-            let isDarkModeOn = UserDefaults.standard.bool(forKey: "isDarkModeManuallySet")
-            win.overrideUserInterfaceStyle = isDarkModeOn ? .dark : .light
+        ThemeManager.shared.applyInitialTheme(for: win)
 
             // 3) Now decide your root view controller
             if AuthService.isSignedIn() {

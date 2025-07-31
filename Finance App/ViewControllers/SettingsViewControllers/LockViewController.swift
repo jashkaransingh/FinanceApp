@@ -21,6 +21,21 @@ final class LockViewController: UIViewController {
         blurView.frame = view.bounds
         blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(blurView)
+        
+        let iconView = UIImageView()
+            let context = LAContext()
+            if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil) {
+                let iconName = context.biometryType == .faceID ? "faceid" : "touchid"
+                iconView.image = UIImage(systemName: iconName, withConfiguration: UIImage.SymbolConfiguration(pointSize: 64))
+            }
+            iconView.tintColor = .white.withAlphaComponent(0.5)
+            
+            view.addSubview(iconView)
+            iconView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                iconView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                iconView.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+            ])
     }
     
     override func viewDidAppear(_ animated: Bool) {

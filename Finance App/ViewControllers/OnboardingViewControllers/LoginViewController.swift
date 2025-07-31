@@ -8,14 +8,14 @@
 import UIKit
 
 class LoginViewController: BaseAuthViewController {
-
+    
     // MARK: - Specific UI Components
     private let emailField = AuthTextField(icon: UIImage(systemName: "envelope.fill"))
     private let passwordField = AuthTextField(icon: UIImage(systemName: "lock.fill"), isSecure: true)
     private let forgotPasswordButton = LinkButton(title: "Forgot password?")
     private let loginButton = PrimaryButton(title: "Log In")
     private let switchToSignupButton = LinkButton(title: "Don't have an account? Sign up")
-
+    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -24,8 +24,14 @@ class LoginViewController: BaseAuthViewController {
         configureUI()
         setupLayout()
         setupTargets()
+        loginButton.isEnabled = false
+        textFields.forEach {
+            $0.textField.addTarget(self,
+                                   action: #selector(loginTextFieldsDidChange(_:)),
+                                   for: .editingChanged)
+        }
     }
-
+    
     // MARK: - Setup
     private func configureUI() {
         // Configure titles inherited from base class
@@ -36,6 +42,15 @@ class LoginViewController: BaseAuthViewController {
         passwordField.textField.placeholder = "Password"
         forgotPasswordButton.setTitleColor(.secondaryLabel, for: .normal)
         switchToSignupButton.setTitleColor(.secondaryLabel, for: .normal)
+        
+        loginButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .headline)
+        loginButton.titleLabel?.adjustsFontForContentSizeCategory = true
+        
+        forgotPasswordButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .subheadline)
+        forgotPasswordButton.titleLabel?.adjustsFontForContentSizeCategory = true
+        
+        switchToSignupButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .subheadline)
+        switchToSignupButton.titleLabel?.adjustsFontForContentSizeCategory = true
         
         // Assign components to base class properties for shared logic
         self.primaryButton = loginButton
@@ -65,7 +80,7 @@ class LoginViewController: BaseAuthViewController {
             forgotPasswordButton.topAnchor.constraint(equalTo: forgotPasswordContainer.topAnchor),
             forgotPasswordButton.trailingAnchor.constraint(equalTo: forgotPasswordContainer.trailingAnchor),
             forgotPasswordButton.bottomAnchor.constraint(equalTo: forgotPasswordContainer.bottomAnchor),
-
+            
             switchToSignupButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             switchToSignupButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16)
         ])
@@ -76,27 +91,63 @@ class LoginViewController: BaseAuthViewController {
         forgotPasswordButton.addTarget(self, action: #selector(handleForgotPassword), for: .touchUpInside)
         switchToSignupButton.addTarget(self, action: #selector(goToSignup), for: .touchUpInside)
     }
-
+    
     // MARK: - Actions
+    
+    @objc private func loginTextFieldsDidChange(_ tf: UITextField) {
+        let emailOK = emailField.textField.text?.isValidEmail() ?? false
+        let passOK  = !(passwordField.textField.text ?? "").isEmpty
+        loginButton.isEnabled = emailOK && passOK
+    }
+    
     @objc private func handleLogin() {
-        guard let email = emailField.textField.text, !email.isEmpty,
-              let password = passwordField.textField.text, !password.isEmpty else {
-            presentAlert(title: "Missing Fields", message: "Please enter both email and password.")
+        if !NetworkMonitor.shared.isConnected {
+            presentAlert(title: "No Internet Connection",
+                         message: "Please check your network and try again.")
             return
         }
         
+        // 1) Trim whitespace/newlines
+        let email    = emailField.textField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let password = passwordField.textField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        
+        // 2) Validate non-empty
+        guard !email.isEmpty, !password.isEmpty else {
+            presentAlert(title: "Missing Fields",
+                         message: "Please enter both email and password.")
+            return
+        }
+        
+        // 3) Validate format
+        if !email.isValidEmail() {
+            presentAlert(title: "Invalid Email",
+                         message: "Please check the format of your email address.")
+            return
+        }
+        
+        // 4) Proceed
         setLoading(true)
-        AuthService.signIn(email: email, password: password) { [weak self] success in
+        AuthService.signIn(email: email, password: password) { [weak self] result in
             guard let self = self else { return }
             self.setLoading(false)
-            if success {
+            
+            switch result {
+            case .success:
                 SceneDelegate.switchToMainApp()
-            } else {
-                self.presentAlert(title: "Login Failed", message: "Please check your email and password.")
+            case .failure(let error):
+                let msg: String
+                switch error {
+                case .userNotFound:  msg = "No account found for that email."
+                case .wrongPassword: msg = "That password looks incorrect."
+                case .networkError:  msg = "Please check your connection and try again."
+                default:             msg = "Login failed—please try again."
+                }
+                self.presentAlert(title: "Login Failed", message: msg)
             }
         }
     }
-
+    
+    
     @objc private func handleForgotPassword() {
         let vc = ResetPasswordViewController()
         navigationController?.pushViewController(vc, animated: true)
