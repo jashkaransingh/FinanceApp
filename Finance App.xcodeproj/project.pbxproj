@@ -14,6 +14,7 @@
 		413EA3822DEE44D400545123 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 413EA3632DEE449500545123 /* WidgetKit.framework */; };
 		413EA3832DEE44D400545123 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 413EA3652DEE449600545123 /* SwiftUI.framework */; };
 		413EA3922DEE44D500545123 /* FinanceWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 413EA3812DEE44D400545123 /* FinanceWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		41A64AB22E3C47A1007553A0 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 41A64AB12E3C47A1007553A0 /* Lottie */; };
 		41C5E7C22DD6E6C1005392C0 /* LinkKit in Frameworks */ = {isa = PBXBuildFile; productRef = 41C5E7C12DD6E6C1005392C0 /* LinkKit */; };
 /* End PBXBuildFile section */
 
@@ -139,6 +140,7 @@
 				413EA2142DE6A9DD00545123 /* FirebaseFirestore in Frameworks */,
 				413EA1DB2DE56CDC00545123 /* FirebaseCore in Frameworks */,
 				413EA1D92DE56CDC00545123 /* FirebaseAuth in Frameworks */,
+				41A64AB22E3C47A1007553A0 /* Lottie in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -241,6 +243,7 @@
 				413EA1DA2DE56CDC00545123 /* FirebaseCore */,
 				413EA2132DE6A9DD00545123 /* FirebaseFirestore */,
 				4138125D2E1CA34700977635 /* GoogleSignIn */,
+				41A64AB12E3C47A1007553A0 /* Lottie */,
 			);
 			productName = "Finance App";
 			productReference = 41C5E72A2DB49EA1005392C0 /* Finance App.app */;
@@ -331,6 +334,7 @@
 				41C5E7C02DD6E6C1005392C0 /* XCRemoteSwiftPackageReference "plaid-link-ios" */,
 				413EA1D72DE56CDC00545123 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				4138125C2E1CA34700977635 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				41A64AB02E3C45DD007553A0 /* XCRemoteSwiftPackageReference "lottie-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 41C5E72B2DB49EA1005392C0 /* Products */;
@@ -802,6 +806,14 @@
 				minimumVersion = 11.13.0;
 			};
 		};
+		41A64AB02E3C45DD007553A0 /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.5.2;
+			};
+		};
 		41C5E7C02DD6E6C1005392C0 /* XCRemoteSwiftPackageReference "plaid-link-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/plaid/plaid-link-ios";
@@ -832,6 +844,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 413EA1D72DE56CDC00545123 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
+		};
+		41A64AB12E3C47A1007553A0 /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 41A64AB02E3C45DD007553A0 /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
 		};
 		41C5E7C12DD6E6C1005392C0 /* LinkKit */ = {
 			isa = XCSwiftPackageProductDependency;

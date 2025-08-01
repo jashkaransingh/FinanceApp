@@ -21,20 +21,17 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = (scene as? UIWindowScene) else { return }
         
         // 1) Create your window
+        // 1) Create your window
             let win = UIWindow(windowScene: windowScene)
             window = win
 
-        ThemeManager.shared.applyInitialTheme(for: win)
+            // 2) Apply the theme
+            ThemeManager.shared.applyInitialTheme(for: win)
+            
+            // 3) Show the correct initial screen
+            SceneDelegate.switchToLogin()
 
-            // 3) Now decide your root view controller
-            if AuthService.isSignedIn() {
-                SceneDelegate.switchToMainApp()
-            } else {
-                let loginVC = LoginViewController()
-                let nav = UINavigationController(rootViewController: loginVC)
-                win.rootViewController = nav
-            }
-
+            // 4) Make the window visible
             win.makeKeyAndVisible()
           }
 //    func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
@@ -67,23 +64,42 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     static func switchToLogin() {
-            // Ensure this UI change happens on the main thread.
-            DispatchQueue.main.async {
-                guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                      let delegate = windowScene.delegate as? SceneDelegate,
-                      let window = delegate.window else {
-                    print("Error: Could not access window to switch to login.")
-                    return
-                }
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let delegate = windowScene.delegate as? SceneDelegate,
+                  let window = delegate.window else { return }
 
+            let rootVC: UIViewController
+
+            // Decide which screen to show
+            if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") == false {
+                // 1. User has NOT seen onboarding yet
+                rootVC = OnboardingViewController()
+            } else if AuthService.isSignedIn() {
+                // 2. User HAS seen onboarding and IS logged in
+                // We can reuse the existing switchToMainApp logic, but we need the main TabBar
+                let accountsVC = AccountsViewController()
+                let nav1 = UINavigationController(rootViewController: accountsVC)
+                nav1.tabBarItem = UITabBarItem(title: nil, image: UIImage(systemName: "creditcard.fill"), tag: 0)
+
+                let historyVC = HistoryViewController()
+                let nav2 = UINavigationController(rootViewController: historyVC)
+                nav2.tabBarItem = UITabBarItem(title: nil, image: UIImage(systemName: "clock"), tag: 1)
+
+                let tabBar = MainTabBarController()
+                tabBar.viewControllers = [nav1, nav2]
+                tabBar.tabBar.tintColor = .label
+                tabBar.tabBar.unselectedItemTintColor = .secondaryLabel
+                rootVC = tabBar
+            } else {
+                // 3. User HAS seen onboarding and is NOT logged in
                 let loginVC = LoginViewController()
-                let nav = UINavigationController(rootViewController: loginVC)
-
-                // Add a smooth transition
-                UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve, animations: {
-                    window.rootViewController = nav
-                })
+                rootVC = UINavigationController(rootViewController: loginVC)
             }
+
+            // Set the root view controller with a transition
+            UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve, animations: {
+                window.rootViewController = rootVC
+            })
         }
 
 
