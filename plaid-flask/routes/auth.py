@@ -114,6 +114,14 @@ def remove_item():
         # 3. Call Plaid's /item/remove endpoint
         remove_request = ItemRemoveRequest(access_token=access_token)
         response = plaid_client.item_remove(remove_request)
+
+        transactions_ref = user_ref.collection('transactions')
+        
+        # B. Delete all documents within that subcollection
+        docs = transactions_ref.stream()
+        for doc in docs:
+            print(f'Deleting doc {doc.id} => {doc.to_dict()}')
+            doc.reference.delete()
         
         # 4. Clean up the user's document in Firestore
         user_ref.update({

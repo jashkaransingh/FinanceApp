@@ -38,31 +38,35 @@ class AccountsViewController: UIViewController {
         configureStackView()
         configureFloatingButton()
         setupActions()
+        NotificationCenter.default.addObserver(self,
+                                                   selector: #selector(handleBankAccountUnlinked),
+                                                   name: .bankAccountUnlinked,
+                                                   object: nil)
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         // 1) Always hide the stock nav‑bar before laying out your custom header
         navigationController?.setNavigationBarHidden(true, animated: animated)
-
+        
         // 2) (Re)attach your Firestore listener so you get live updates
         attachListener()
-      }
-
-      override func viewWillDisappear(_ animated: Bool) {
+    }
+    
+    override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         // 1) Restore the nav‑bar so downstream VCs get the standard bar
         navigationController?.setNavigationBarHidden(false, animated: animated)
-
+        
         // 2) Cleanup the listener
         listener?.remove()
         listener = nil
-
+        
         // 3) If the user was mid‑pull‑to‑refresh, cancel it
         if refreshControl.isRefreshing {
-          refreshControl.endRefreshing()
+            refreshControl.endRefreshing()
         }
-      }
+    }
     
     // MARK: – UI Configuration
     private func configureHeader() {// Configures and constrains the custom headerView.
@@ -84,27 +88,27 @@ class AccountsViewController: UIViewController {
         
     }
     
-        private func configureScrollView() {// Configures and constrains the scrollView below the header
-          view.addSubview(scrollView)
-          scrollView.alwaysBounceVertical = true
-          scrollView.translatesAutoresizingMaskIntoConstraints = false
-
-          // ← Preferred, since iOS 10:
-          if #available(iOS 10.0, *) {
+    private func configureScrollView() {// Configures and constrains the scrollView below the header
+        view.addSubview(scrollView)
+        scrollView.alwaysBounceVertical = true
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // ← Preferred, since iOS 10:
+        if #available(iOS 10.0, *) {
             scrollView.refreshControl = refreshControl
-          } else {
+        } else {
             scrollView.addSubview(refreshControl)
-          }
-          refreshControl.addTarget(self, action: #selector(refreshData), for: .valueChanged)
-
-          NSLayoutConstraint.activate([
+        }
+        refreshControl.addTarget(self, action: #selector(refreshData), for: .valueChanged)
+        
+        NSLayoutConstraint.activate([
             scrollView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
             scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
-          ])
-        }
-
+        ])
+    }
+    
     
     private func configureStackView() {// Configures the vertical stackView inside the scrollView
         // Configure the stack
@@ -178,23 +182,29 @@ class AccountsViewController: UIViewController {
             self.refreshControl.endRefreshing()
         }
     }
+    @objc private func handleBankAccountUnlinked() {
+        listener?.remove()
+        attachListener()
+    }
     
     /// Attaches a real-time listener to the user document to get live summary updates.
     // In AccountsViewController.swift
-
+    
     /// Attaches a real-time listener to the user document to get live summary updates.
     private func attachListener() {
         guard let uid = Auth.auth().currentUser?.uid else {
             showPlaceholder(message: "Please sign in.")
             return
         }
+        
         showSkeletonCards()
         
         let docRef = Firestore.firestore().collection("users").document(uid)
         listener = docRef.addSnapshotListener { [weak self] documentSnapshot, error in
             guard let self = self else { return }
-            
             self.refreshControl.endRefreshing()
+            
+            // --- NEW, SMARTER LOGIC STARTS HERE ---
             
             if let error = error {
                 print("Firestore listener error: \(error.localizedDescription)")
@@ -203,31 +213,36 @@ class AccountsViewController: UIViewController {
             }
             
             guard let document = documentSnapshot, document.exists else {
-                print("User document does not exist.")
                 self.showPlaceholder(message: "An error occurred.")
                 return
             }
             
-            // This is a much safer way to decode.
-            // We first check if the 'accountSummaries' field exists at all.
-            guard let userData = document.data(), let _ = userData["accountSummaries"] else {
-                self.showPlaceholder(message: "Syncing your accounts...")
-                // The backend hasn't generated the summaries yet. We need to ask for them.
-                // We use the refreshData function to do this.
-                self.refreshData()
-                return
-            }
+            // 1. Decode the entire user document into a model.
+            //    We need to create a simple UserData struct for this.
+            let userData = try? document.data(as: UserProfile.self)
             
-            // Now that we know the field exists, we can safely decode.
-            do {
-                self.summaries = try document.data(as: UserData.self).accountSummaries ?? []
-                self.stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
-                self.placeholderButton?.removeFromSuperview()
-                self.populateCards()
-                
-            } catch {
-                print("Error decoding user data from Firestore: \(error)")
-                self.showPlaceholder(message: "Could not load accounts.")
+            // 2. Check the single source of truth: isBankConnected
+            //    (We will add this property to your UserProfile model)
+            if userData?.isBankConnected == true {
+                // THE BANK IS CONNECTED.
+                // Now, check if the summary data is ready.
+                if let summaries = userData?.accountSummaries, !summaries.isEmpty {
+                    // Data is ready! Show the cards.
+                    self.summaries = summaries
+                    self.stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+                    self.placeholderButton?.removeFromSuperview()
+                    self.populateCards()
+                } else {
+                    // Bank is linked, but summaries aren't ready yet.
+                    // This happens on a new phone or during a slow sync.
+                    // Show a specific message and trigger a sync.
+                    self.showPlaceholder(message: "Syncing your accounts...")
+                    self.refreshData()
+                }
+            } else {
+                // THE BANK IS NOT CONNECTED.
+                // Show the button to connect a bank.
+                self.showPlaceholder(message: "Connect Your Bank")
             }
         }
     }
@@ -237,16 +252,34 @@ class AccountsViewController: UIViewController {
         placeholderButton?.removeFromSuperview()
         refreshControl.endRefreshing()
         
-        let button = makeConnectButton()
-        button.setTitle(message, for: .normal) // More flexible placeholder
-        button.addTarget(self, action: #selector(startPlaidLinkFlow), for: .touchUpInside)
-        placeholderButton = button
-        
-        view.addSubview(button)
-        NSLayoutConstraint.activate([
-            button.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
-            button.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
-        ])
+        if message == "Connect Your Bank" {
+            let button = makeConnectButton()
+            button.setTitle(message, for: .normal)
+            button.addTarget(self, action: #selector(startPlaidLinkFlow), for: .touchUpInside)
+            placeholderButton = button
+            
+            view.addSubview(button)
+            NSLayoutConstraint.activate([
+                button.centerXAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerXAnchor),
+                button.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
+            ])
+        } else {
+            // For messages like "Syncing your accounts...", just show a label.
+            let lbl = UILabel()
+            lbl.text = message
+            lbl.font = .systemFont(ofSize: 18, weight: .medium)
+            lbl.textColor = .secondaryLabel
+            lbl.textAlignment = .center
+            
+            // This is a temporary placeholder label, not the main button.
+            let tempPlaceholder = lbl
+            view.addSubview(tempPlaceholder)
+            tempPlaceholder.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                tempPlaceholder.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                tempPlaceholder.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            ])
+        }
     }
     
     
@@ -306,6 +339,7 @@ class AccountsViewController: UIViewController {
                         return
                     }
                 }
+            NotificationCenter.default.post(name: .bankAccountLinked, object: nil)
         } onError: { error in
             print("Plaid Link flow failed:", error)
         }

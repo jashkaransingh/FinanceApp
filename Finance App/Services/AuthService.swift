@@ -224,7 +224,11 @@ class AuthService {
                                         email: String,
                                         completion: @escaping (Result<Void, AuthError>) -> Void) {
         // 1. Create an instance of our new Codable struct.
-        let userProfile = UserProfile(name: name, email: email, createdAt: Timestamp())
+        let userProfile = UserProfile(name: name,
+                                      email: email,
+                                      createdAt: Timestamp(),
+                                      isBankConnected: false,
+                                      accountSummaries: nil)
         
         let db = Firestore.firestore()
         

@@ -53,6 +53,14 @@ class HistoryViewController: UIViewController {
         tableView.addSubview(refreshControl)
         
         // --- NEW: Attach the listener when the view loads ---
+        NotificationCenter.default.addObserver(self,
+                                                   selector: #selector(handleBankAccountLinked),
+                                                   name: .bankAccountLinked,
+                                                   object: nil)
+        NotificationCenter.default.addObserver(self,
+                                                   selector: #selector(handleBankAccountUnlinked),
+                                                   name: .bankAccountUnlinked,
+                                                   object: nil)
         attachFirestoreListener()
     }
     
@@ -169,6 +177,14 @@ class HistoryViewController: UIViewController {
         }
     }
     
+    @objc private func handleBankAccountLinked() {
+        // Detach the old listener to be safe
+        listener?.remove()
+        // Re-attach the listener. This will force it to check if the
+        // transactions collection is empty and trigger a sync if needed.
+        attachFirestoreListener()
+    }
+    
     /// 2. Manually tells the server to sync with Plaid.
     ///    The Firestore listener will automatically pick up any new data.
     @objc private func syncWithServer() {
@@ -183,6 +199,11 @@ class HistoryViewController: UIViewController {
                 // Optionally show an error banner to the user
             }
         }
+    }
+    
+    @objc private func handleBankAccountUnlinked() {
+        listener?.remove()
+        attachFirestoreListener()
     }
     
     
