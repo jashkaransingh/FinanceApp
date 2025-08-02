@@ -127,7 +127,8 @@ def remove_item():
         user_ref.update({
             'plaidAccessToken': firestore.DELETE_FIELD,
             'plaidItemId': firestore.DELETE_FIELD,
-            'isBankConnected': firestore.DELETE_FIELD
+            'isBankConnected': firestore.DELETE_FIELD,
+            'accountSummaries': firestore.DELETE_FIELD
         })
         
         print(f"✅ Successfully removed Plaid item and cleaned up Firestore for user {uid}")
