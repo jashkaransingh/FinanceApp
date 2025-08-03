@@ -12,18 +12,10 @@ import FirebaseFirestore
 final class LinkedAccountsViewController: UIViewController {
     
     // MARK: – Properties
-    private var didPerformFirstUIUpdate = false
-    private var isAccountLinked: Bool = false {
-        didSet {
-            updateUIForLinkStatus(animated: didPerformFirstUIUpdate)
-            didPerformFirstUIUpdate = true
-        }
-    }
-    
-    // Firestore listener registration
-    private var firestoreListener: ListenerRegistration?
+    private var isAccountLinked: Bool = false
     
     // MARK: - UI Components
+    private let activityIndicator = UIActivityIndicatorView(style: .large)
     
     private let tableView: UITableView = {
         let tv = UITableView(frame: .zero, style: .insetGrouped)
@@ -47,33 +39,37 @@ final class LinkedAccountsViewController: UIViewController {
         
         setupTableView()
         setupEmptyStateView()
-        tableView.isHidden      = true
+        setupActivityIndicator()
+        
+        tableView.isHidden = true
         emptyStateView.isHidden = true
-        if let uid = Auth.auth().currentUser?.uid {
-            Firestore.firestore().collection("users").document(uid)
-                .getDocument { [weak self] doc, _ in
-                    let linked = doc?.data()?["isBankConnected"] as? Bool ?? false
-                    self?.isAccountLinked = linked
-                }
-        }
-        // 2) Then listen for live updates
-        addSnapshotListenerForLinkStatus()
+        activityIndicator.hidesWhenStopped = true
+        emptyStateView.configure(message: "No bank account linked.", buttonTitle: "Link First Account")
     }
     
-    deinit {
-        // IMPORTANT: Always remove the listener when the view controller is deallocated.
-        firestoreListener?.remove()
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        fetchLinkStatus()
     }
     
     // MARK: – UI Setup
+    
+    private func setupActivityIndicator() {
+        view.addSubview(activityIndicator)
+        activityIndicator.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
+    }
     
     private func setupTableView() {
         view.addSubview(tableView)
         tableView.dataSource = self
         tableView.delegate = self
         NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: view.topAnchor),
-            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            tableView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
@@ -81,140 +77,108 @@ final class LinkedAccountsViewController: UIViewController {
     
     private func setupEmptyStateView() {
         view.addSubview(emptyStateView)
-        emptyStateView.addTarget(self, action: #selector(addOrReplaceAccount), for: .touchUpInside)
+        emptyStateView.setAction(self, action: #selector(addOrReplaceAccount), for: .touchUpInside)
         NSLayoutConstraint.activate([
-            emptyStateView.topAnchor.constraint(equalTo: view.topAnchor),
-            emptyStateView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            emptyStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            emptyStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            emptyStateView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            emptyStateView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            emptyStateView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            emptyStateView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor)
         ])
     }
     
-    private func presentAlert(title: String, message: String) {
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        self.present(alert, animated: true)
-    }
-    
-    /// Updates the visibility of UI elements based on whether an account is linked.
-    private func updateUIForLinkStatus(animated: Bool) {
-        let show = isAccountLinked ? tableView : emptyStateView
-        let hide = isAccountLinked ? emptyStateView : tableView
-        
-        let changes = {
-            show.isHidden = false
-            hide.isHidden = true
-        }
-        
-        if animated {
-            UIView.transition(
-                with: view,
-                duration: 0.3,
-                options: .transitionCrossDissolve,
-                animations: changes
-            )
-        } else {
-            changes()
-        }
+    private func updateUI() {
+        activityIndicator.stopAnimating()
+        tableView.isHidden = !isAccountLinked
+        emptyStateView.isHidden = isAccountLinked
         
         if isAccountLinked {
             tableView.reloadData()
         }
     }
     
-    // MARK: – Data (Real-time Listener)
+    // MARK: – Data
     
-    /// Attaches a real-time listener to the user's document in Firestore.
-    private func addSnapshotListenerForLinkStatus() {
+    private func fetchLinkStatus() {
+        // Show loading spinner immediately
+        tableView.isHidden = true
+        emptyStateView.isHidden = true
+        activityIndicator.startAnimating()
+        
         guard let uid = Auth.auth().currentUser?.uid else {
             self.isAccountLinked = false
+            self.updateUI()
             return
         }
         
-        let docRef = Firestore.firestore().collection("users").document(uid)
-        
-        // This listener will be called immediately with the current data,
-        // and then again every time the data changes on the server.
-        firestoreListener = docRef.addSnapshotListener { [weak self] (document, error) in
-            print("🔥 FIRESTORE LISTENER FIRED! 🔥")
+        // Perform a quick, one-time fetch
+        Firestore.firestore().collection("users").document(uid).getDocument { [weak self] doc, error in
             guard let self = self else { return }
-            
             if let error = error {
-                print("Error listening to document changes: \(error)")
-                self.isAccountLinked = false
+                // stop spinner & show error
+                self.activityIndicator.stopAnimating()
+                let alert = UIAlertController(title: "Error", message: error.localizedDescription, preferredStyle: .alert)
+                alert.addAction(.init(title: "OK", style: .default))
+                self.present(alert, animated: true)
                 return
             }
             
-            if let document = document, document.exists {
-                self.isAccountLinked = document.data()?["isBankConnected"] as? Bool ?? false
+            if let data = doc?.data(), doc!.exists {
+                self.isAccountLinked = data["isBankConnected"] as? Bool ?? false
             } else {
                 self.isAccountLinked = false
             }
+            self.updateUI()
         }
     }
     
     // MARK: – Actions
     
     private func unlinkAccount() {
-        // Show a loading indicator here if you have one
+        // 1️⃣ Flip the UI immediately so the “Link First Account” button appears
+        isAccountLinked = false
+        updateUI()
+
+        // 2️⃣ Call unlink without showing the spinner
         PlaidService.shared.unlinkAccount { [weak self] result in
-            // Hide loading indicator
-            guard let self = self else { return }
-            
-            switch result {
-            case .success:
-                // 1) Update Firestore (you already do that in your /remove_item endpoint)
-                // 2) Notify the home screen to refresh
-                NotificationCenter.default.post(name: .bankLinkChanged, object: nil)
-                // This part remains the same. The Firestore listener will handle the UI update.
-                print("Unlink successful. Firestore listener will update UI.")
+            DispatchQueue.main.async {
+                guard let self = self else { return }
                 
-            case .failure(let error):
-                // This is the new, powerful error handling.
-                switch error {
-                case .sessionExpired:
-                    // The user's token is invalid. Force them to log in again.
-                    print("Session expired. Forcing user to re-login.")
-                    SceneDelegate.switchToLogin() // Use your existing function!
+                switch result {
+                case .success:
+                    NotificationCenter.default.post(name: .bankAccountUnlinked, object: nil)
+                    // UI is already in empty-state; no further work needed
                     
-                case .serverError(let message):
-                    // A specific error from your server or the network.
-                    self.presentAlert(title: "Server Error", message: message)
-                    
-                default:
-                    // A generic error for other cases.
-                    self.presentAlert(title: "Error", message: "An unexpected error occurred. Please try again.")
+                case .failure(let error):
+                    let alert = UIAlertController(
+                        title: "Error",
+                        message: error.localizedDescription,
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(.init(title: "OK", style: .default))
+                    self.present(alert, animated: true)
                 }
             }
         }
     }
+    
     
     @objc private func addOrReplaceAccount() {
         startPlaidLinkFlow()
     }
     
     private func startPlaidLinkFlow() {
-        PlaidService.shared.startPlaidLink(from: self, onSuccess: { [weak self] in
+        PlaidService.shared.startPlaidLink(from: self,
+                                           onSuccess: { [weak self] in
             guard let self = self else { return }
-            // 1) Firestore is updated in exchange_public_token
-            // 2) Now tell home screen to reload
-            NotificationCenter.default.post(name: .bankLinkChanged, object: nil)
-            print("Link successful. Refresh posted.")
-            
-        }, onError: { error in
+            NotificationCenter.default.post(name: .bankAccountLinked, object: nil)
+            self.fetchLinkStatus()
+        },
+                                           onError: { [weak self] error in
+            guard let self = self else { return }
             print("Plaid Link flow failed: \(error)")
+            // you might want to show an alert here too
         })
     }
-    
-    // MARK: – Coordination
-    
-    //    private func notifyHomeToRefresh() {
-    //        // This is still a good idea to have, in case the user navigates back quickly.
-    //        if let nav = navigationController,
-    //           let homeVC = nav.viewControllers.first(where: { $0 is AccountsViewController }) as? AccountsViewController {
-    //            homeVC.needsRefresh = true
-    //        }
-    //    }
 }
 
 // MARK: - UITableViewDataSource, UITableViewDelegate
@@ -223,7 +187,6 @@ extension LinkedAccountsViewController: UITableViewDataSource, UITableViewDelega
     func numberOfSections(in tableView: UITableView) -> Int { 1 }
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        // The table is only visible when isAccountLinked is true, so we can always return 1.
         return 1
     }
     
@@ -236,7 +199,17 @@ extension LinkedAccountsViewController: UITableViewDataSource, UITableViewDelega
     
     func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
         guard editingStyle == .delete else { return }
-        unlinkAccount()
+        
+        let alert = UIAlertController(title: "Unlink Account?",
+                                      message: "Are you sure you want to remove this account? All related data will be deleted.",
+                                      preferredStyle: .alert)
+        
+        let removeAction = UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
+            self?.unlinkAccount()
+        }
+        alert.addAction(removeAction)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
+        present(alert, animated: true)
     }
 }
 

@@ -62,8 +62,12 @@ class EmptyStateView: UIView {
     }
     
     // MARK: - Public Methods
+    public func configure(message: String, buttonTitle: String) {
+        messageLabel.text = message
+        actionButton.setTitle(buttonTitle, for: .normal)
+    }
     
-    public func addTarget(_ target: Any?, action: Selector, for controlEvents: UIControl.Event) {
-        actionButton.addTarget(target, action: action, for: controlEvents)
+    public func setAction(_ target: Any?, action: Selector, for event: UIControl.Event) {
+      actionButton.addTarget(target, action: action, for: event)
     }
 }

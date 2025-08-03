@@ -24,6 +24,7 @@ class HistoryViewController: UIViewController {
     private var isLoading = false
     private let refreshControl = UIRefreshControl()
     private var listener: ListenerRegistration?
+    private var authStateHandle: AuthStateDidChangeListenerHandle?
     
     // MARK: – Formatters
     private static let isoDateFormatter: DateFormatter = {
@@ -54,24 +55,45 @@ class HistoryViewController: UIViewController {
         
         // --- NEW: Attach the listener when the view loads ---
         NotificationCenter.default.addObserver(self,
-                                                   selector: #selector(handleBankAccountLinked),
-                                                   name: .bankAccountLinked,
-                                                   object: nil)
+                                               selector: #selector(handleBankAccountLinked),
+                                               name: .bankAccountLinked,
+                                               object: nil)
         NotificationCenter.default.addObserver(self,
-                                                   selector: #selector(handleBankAccountUnlinked),
-                                                   name: .bankAccountUnlinked,
-                                                   object: nil)
-        attachFirestoreListener()
+                                               selector: #selector(handleBankAccountUnlinked),
+                                               name: .bankAccountUnlinked,
+                                               object: nil)
+       
     }
     
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        
+        // This listener waits for Firebase Auth to be ready.
+        authStateHandle = Auth.auth().addStateDidChangeListener { [weak self] (auth, user) in
+            guard let self = self else { return }
+            
+            if user != nil {
+                // User is logged in, now it's safe to attach the data listener.
+                self.attachFirestoreListener()
+            } else {
+                // User is not logged in, show an empty state.
+                self.showPlaceholder(message: "Please sign in to view history.")
+            }
+        }
+    }
+
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        if refreshControl.isRefreshing {
-                refreshControl.endRefreshing()
-            }
-        // --- MOVED: Detach the listener when the view is no longer visible ---
-        // This is crucial for performance and to prevent memory leaks.
+        
+        // Clean up both the data listener AND the auth listener.
+        if let handle = authStateHandle {
+            Auth.auth().removeStateDidChangeListener(handle)
+        }
         listener?.remove()
+        
+        if refreshControl.isRefreshing {
+            refreshControl.endRefreshing()
+        }
     }
     
     // MARK: – Configuration
@@ -136,44 +158,58 @@ class HistoryViewController: UIViewController {
     private func attachFirestoreListener() {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         
-        showLoadingState() // Show shimmer cells while we wait for the first update
+        // 1. First, check the main user document.
+        let userDocRef = Firestore.firestore().collection("users").document(uid)
         
-        let query = Firestore.firestore()
-            .collection("users").document(uid).collection("transactions")
-            .order(by: "date", descending: true) // Order by date in the query itself
-        
-        listener = query.addSnapshotListener { [weak self] querySnapshot, error in
+        userDocRef.getDocument { [weak self] document, error in
             guard let self = self else { return }
-            self.refreshControl.endRefreshing()
-            self.hideLoadingState()
             
-            // Handle errors
-            guard let snapshot = querySnapshot, error == nil else {
-                print("❌ Error fetching snapshots: \(error!)")
-                self.showPlaceholder(message: "Could not load transactions.")
+            // 2. Check the 'isBankConnected' flag from the document.
+            let isConnected = document?.data()?["isBankConnected"] as? Bool ?? false
+            
+            // 3. If NOT connected, show the placeholder immediately (this is fast).
+            if !isConnected {
+                self.showPlaceholder(message: "Connect a bank to see your transaction history.")
                 return
             }
             
-            // --- Handle the first-time sync ---
-            // If the listener returns no documents, it means our database is empty.
-            // We need to trigger a one-time fetch from the server to populate it.
-            if snapshot.isEmpty {
-                self.showPlaceholder(message: "No transactions found. Let's sync with your bank.")
-                self.syncWithServer()
-                return // The listener will fire again once syncWithServer populates the DB.
-            }
+            // 4. If connected, THEN listen for transactions (your old logic).
+            self.showLoadingState()
+            let query = userDocRef.collection("transactions").order(by: "date", descending: true)
             
-            // --- Process the documents ---
-            // map() efficiently converts all Firestore documents into our [Transaction] model
-            self.allTransactions = snapshot.documents.compactMap { document in
-                // Using Codable to automatically decode the dictionary
-                try? document.data(as: Transaction.self)
+            self.listener = query.addSnapshotListener { [weak self] querySnapshot, error in
+                guard let self = self else { return }
+                self.refreshControl.endRefreshing()
+                self.hideLoadingState()
+                
+                // Handle errors
+                guard let snapshot = querySnapshot, error == nil else {
+                    print("❌ Error fetching snapshots: \(error!)")
+                    self.showPlaceholder(message: "Could not load transactions.")
+                    return
+                }
+                
+                // --- Handle the first-time sync ---
+                // If the listener returns no documents, it means our database is empty.
+                // We need to trigger a one-time fetch from the server to populate it.
+                if snapshot.isEmpty {
+                    self.showPlaceholder(message: "No transactions found. Let's sync with your bank.")
+                    self.syncWithServer()
+                    return // The listener will fire again once syncWithServer populates the DB.
+                }
+                
+                // --- Process the documents ---
+                // map() efficiently converts all Firestore documents into our [Transaction] model
+                self.allTransactions = snapshot.documents.compactMap { document in
+                    // Using Codable to automatically decode the dictionary
+                    try? document.data(as: Transaction.self)
+                }
+                
+                // All subsequent logic now works on the new data
+                self.groupTransactionsByMonth()
+                self.tableView.reloadData()
+                self.placeholderLabel?.removeFromSuperview()
             }
-            
-            // All subsequent logic now works on the new data
-            self.groupTransactionsByMonth()
-            self.tableView.reloadData()
-            self.placeholderLabel?.removeFromSuperview()
         }
     }
     
@@ -193,10 +229,18 @@ class HistoryViewController: UIViewController {
         }
         
         DataService.loadTransactions(period: "month") { [weak self] result in
-            self?.refreshControl.endRefreshing()
-            if case .failure(let error) = result {
+            guard let self = self else { return }
+            self.refreshControl.endRefreshing()
+            
+            switch result {
+            case .success:
+                // On success, the Firestore listener will handle the update automatically.
+                // We don't need to do anything here.
+                print("Server sync successful. Listener will update UI.")
+            case .failure(let error):
+                // On failure (e.g., token not found), clear the UI.
                 print("Server sync failed: \(error.localizedDescription)")
-                // Optionally show an error banner to the user
+                self.showPlaceholder(message: "Please connect a bank account to see transactions.")
             }
         }
     }

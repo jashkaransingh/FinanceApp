@@ -20,6 +20,7 @@ class AccountsViewController: UIViewController {
     private let scrollView = UIScrollView()// Scrollable area for cards
     private let stackView  = UIStackView()// Vertical stack inside scrollView
     private let refreshControl = UIRefreshControl()
+    private var tempPlaceholderLabel: UILabel?
     
     // MARK: – Data Properties
     private var summaries: [AccountSummary] = []//list of account summaries (fetched from backend)
@@ -39,9 +40,10 @@ class AccountsViewController: UIViewController {
         configureFloatingButton()
         setupActions()
         NotificationCenter.default.addObserver(self,
-                                                   selector: #selector(handleBankAccountUnlinked),
-                                                   name: .bankAccountUnlinked,
-                                                   object: nil)
+                                               selector: #selector(handleBankAccountUnlinked),
+                                               name: .bankAccountUnlinked,
+                                               object: nil)
+        
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -144,6 +146,9 @@ class AccountsViewController: UIViewController {
     
     // MARK: – Skeleton & Placeholder
     private func showSkeletonCards() {// Show loading animation while fetching data
+        placeholderButton?.removeFromSuperview()
+        tempPlaceholderLabel?.removeFromSuperview()
+        scrollView.isHidden = false
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for _ in 0..<3 {
             let skeleton = ShimmerView()
@@ -248,8 +253,13 @@ class AccountsViewController: UIViewController {
     }
     
     private func showPlaceholder(message: String) {
+        self.scrollView.isHidden = true
         stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        
+        // --- 1. REMOVE BOTH KINDS OF PLACEHOLDERS ---
         placeholderButton?.removeFromSuperview()
+        tempPlaceholderLabel?.removeFromSuperview()
+        
         refreshControl.endRefreshing()
         
         if message == "Connect Your Bank" {
@@ -264,20 +274,19 @@ class AccountsViewController: UIViewController {
                 button.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
             ])
         } else {
-            // For messages like "Syncing your accounts...", just show a label.
             let lbl = UILabel()
             lbl.text = message
             lbl.font = .systemFont(ofSize: 18, weight: .medium)
             lbl.textColor = .secondaryLabel
             lbl.textAlignment = .center
             
-            // This is a temporary placeholder label, not the main button.
-            let tempPlaceholder = lbl
-            view.addSubview(tempPlaceholder)
-            tempPlaceholder.translatesAutoresizingMaskIntoConstraints = false
+            tempPlaceholderLabel = lbl // Use the class property
+            
+            view.addSubview(tempPlaceholderLabel!)
+            tempPlaceholderLabel!.translatesAutoresizingMaskIntoConstraints = false
             NSLayoutConstraint.activate([
-                tempPlaceholder.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-                tempPlaceholder.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+                tempPlaceholderLabel!.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                tempPlaceholderLabel!.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             ])
         }
     }
@@ -286,6 +295,10 @@ class AccountsViewController: UIViewController {
     
     // MARK: – UI Population
     private func populateCards() {
+        stackView.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        placeholderButton?.removeFromSuperview()
+        tempPlaceholderLabel?.removeFromSuperview()
+        self.scrollView.isHidden = false
         summaries.forEach { model in//iterate through each item in summaries
             let card = AccountCardView()//create instance of custom card view
             card.configure(with: model)//passes data model to the card
