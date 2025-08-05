@@ -168,7 +168,7 @@ final class LinkedAccountsViewController: UIViewController {
     
     private func startPlaidLinkFlow() {
         PlaidService.shared.startPlaidLink(from: self,
-                                           onSuccess: { [weak self] in
+                                           onSuccess: { [weak self] _ in
             guard let self = self else { return }
             NotificationCenter.default.post(name: .bankAccountLinked, object: nil)
             self.fetchLinkStatus()

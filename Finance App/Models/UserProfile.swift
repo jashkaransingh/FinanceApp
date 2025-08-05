@@ -17,5 +17,6 @@ struct UserProfile: Codable {
     
     // Add these properties from your UserData struct
     let isBankConnected: Bool?
+    var bankName: String? 
     let accountSummaries: [AccountSummary]?
 }

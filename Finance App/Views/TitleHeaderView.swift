@@ -23,8 +23,15 @@ class TitleHeaderView: UIView {
         let label = UILabel()
         label.text = "My Accounts"
         label.font = .systemFont(ofSize: 34, weight: .bold)
+        label.adjustsFontSizeToFitWidth = true // Allows the font to shrink
+        label.minimumScaleFactor = 0.7
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return label
     }()
+    public var title: String {
+        get { titleLabel.text ?? "" }
+        set { titleLabel.text = newValue }
+      }
     
     private let profileButton: UIButton = {
         let btn = UIButton(type: .system)
@@ -77,7 +84,9 @@ class TitleHeaderView: UIView {
             
             // pin the profile icon to the right, centered on the stack
             profileButton.trailingAnchor.constraint(equalTo: trailingAnchor),
-            profileButton.centerYAnchor.constraint(equalTo: titleStack.centerYAnchor)
+            profileButton.centerYAnchor.constraint(equalTo: titleStack.centerYAnchor),
+            
+            titleStack.trailingAnchor.constraint(lessThanOrEqualTo: profileButton.leadingAnchor, constant: -8)
         ])
     }
     

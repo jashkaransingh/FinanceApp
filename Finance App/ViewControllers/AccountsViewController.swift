@@ -21,6 +21,36 @@ class AccountsViewController: UIViewController {
     private let stackView  = UIStackView()// Vertical stack inside scrollView
     private let refreshControl = UIRefreshControl()
     private var tempPlaceholderLabel: UILabel?
+    private let aiBadgeContainer: UIView = {
+        let view = UIView()
+        // Adaptive background: white@60% in light, black@60% in dark
+        view.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.6)
+        view.layer.cornerRadius = 14
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }()
+    
+    private let aiBadgeIcon: UIImageView = {
+        let config = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
+        let iv = UIImageView(image: UIImage(systemName: "apple.intelligence", withConfiguration: config))
+        // Use dynamic label color
+        iv.tintColor = .label
+        iv.translatesAutoresizingMaskIntoConstraints = false
+        return iv
+    }()
+    
+    private let aiBadgeLabel: UILabel = {
+        // Uppercase + letter spacing
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 12, weight: .bold),
+            .foregroundColor: UIColor.label,  // dynamic
+            .kern: 1.2
+        ]
+        let lbl = UILabel()
+        lbl.attributedText = NSAttributedString(string: "BUDGET AI", attributes: attrs)
+        lbl.translatesAutoresizingMaskIntoConstraints = false
+        return lbl
+    }()
     
     // MARK: – Data Properties
     private var summaries: [AccountSummary] = []//list of account summaries (fetched from backend)
@@ -133,16 +163,50 @@ class AccountsViewController: UIViewController {
         ])
     }
     
-    private func configureFloatingButton() {// Adds the “+” floating button in the bottom‐right corner
+    private func configureFloatingButton() {
+        // 1️⃣ FAB
         let fab = FloatingActionButton()
         view.addSubview(fab)
-        
-        NSLayoutConstraint.activate([
-            fab.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-            fab.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24)
-        ])
         fab.addTarget(self, action: #selector(didTapBudgetAssistant), for: .touchUpInside)
+        
+        // 2️⃣ Badge container + icon + label
+        view.addSubview(aiBadgeContainer)
+        aiBadgeContainer.addSubview(aiBadgeIcon)
+        aiBadgeContainer.addSubview(aiBadgeLabel)
+        
+        // 3️⃣ Layout
+        NSLayoutConstraint.activate([
+            // FAB position
+            fab.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            fab.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+            
+            // Badge to left of FAB
+            aiBadgeContainer.centerYAnchor.constraint(equalTo: fab.centerYAnchor),
+            aiBadgeContainer.trailingAnchor.constraint(equalTo: fab.leadingAnchor, constant: -12),
+            aiBadgeContainer.heightAnchor.constraint(equalToConstant: 28),
+            
+            // Icon inside badge
+            aiBadgeIcon.leadingAnchor.constraint(equalTo: aiBadgeContainer.leadingAnchor, constant: 8),
+            aiBadgeIcon.centerYAnchor.constraint(equalTo: aiBadgeContainer.centerYAnchor),
+            
+            // Label inside badge
+            aiBadgeLabel.leadingAnchor.constraint(equalTo: aiBadgeIcon.trailingAnchor, constant: 4),
+            aiBadgeLabel.trailingAnchor.constraint(equalTo: aiBadgeContainer.trailingAnchor, constant: -8),
+            aiBadgeLabel.centerYAnchor.constraint(equalTo: aiBadgeContainer.centerYAnchor)
+        ])
+        
+        // 4️⃣ Pulse animation (optional, keep if you like)
+        let pulse = CABasicAnimation(keyPath: "transform.scale")
+        pulse.duration       = 1.8
+        pulse.fromValue      = 1.0
+        pulse.toValue        = 1.03
+        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        pulse.autoreverses   = true
+        pulse.repeatCount    = .infinity
+        aiBadgeContainer.layer.add(pulse, forKey: "pulse")
     }
+    
+    
     
     // MARK: – Skeleton & Placeholder
     private func showSkeletonCards() {// Show loading animation while fetching data
@@ -225,6 +289,12 @@ class AccountsViewController: UIViewController {
             // 1. Decode the entire user document into a model.
             //    We need to create a simple UserData struct for this.
             let userData = try? document.data(as: UserProfile.self)
+//            update Header
+            if let bank = userData?.bankName, !bank.isEmpty {
+              headerView.title = "\(bank) Account"
+            } else {
+              headerView.title = "My Accounts"
+            }
             
             // 2. Check the single source of truth: isBankConnected
             //    (We will add this property to your UserProfile model)
@@ -340,23 +410,20 @@ class AccountsViewController: UIViewController {
     
     /// The new, correct action for the "Connect Bank" placeholder button.
     @objc private func startPlaidLinkFlow() {
-        PlaidService.shared.startPlaidLink(from: self) { [weak self] in
-            guard let self = self else { return }
-            let uid = Auth.auth().currentUser!.uid
-            Firestore.firestore()
-                .collection("users")
-                .document(uid)
-                .setData(["isBankConnected": true], merge: true) { error in
-                    if let error = error {
-                        print("couldn’t mark bank connected:", error)
-                        return
-                    }
-                }
-            NotificationCenter.default.post(name: .bankAccountLinked, object: nil)
-        } onError: { error in
-            print("Plaid Link flow failed:", error)
+      PlaidService.shared.startPlaidLink(
+        from: self,
+        onSuccess: { [weak self] _ in
+          // Simply re-fetch the user doc to pick up isBankConnected + bankName
+          self?.attachListener()
+        },
+        onError: { error in
+          print("Plaid Link flow failed:", error)
         }
+      )
     }
+
+
+
     
     @objc private func cardTapped(_ card: AccountCardView) {
         guard//unwrap model
