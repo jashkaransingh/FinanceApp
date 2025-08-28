@@ -19,6 +19,7 @@ class AuthService {
         case weakPassword         // signup: password fails strength rules
         case networkError         // underlying network request failed
         case profileSaveFailed(Error)
+        case emailNotVerified
         case unknown(String)      // catch‑all for other error messages
     }
     
@@ -48,60 +49,78 @@ class AuthService {
         }
     }
     
-    
-    
     static func register(email: String,
                          password: String,
                          name: String,
                          completion: @escaping (Result<Void, AuthError>) -> Void) {
+
         FirebaseAuth.Auth.auth().createUser(withEmail: email, password: password) { result, error in
-            // If Firebase returned an error, map to AuthError:
+            // Map Firebase error → AuthError
             if let nsError = error as NSError? {
                 let authErr: AuthError
                 switch nsError.code {
-                case AuthErrorCode.emailAlreadyInUse.rawValue:
-                    authErr = .emailAlreadyInUse
-                case AuthErrorCode.weakPassword.rawValue:
-                    authErr = .weakPassword
-                case AuthErrorCode.networkError.rawValue:
-                    authErr = .networkError
-                default:
-                    authErr = .unknown(nsError.localizedDescription)
+                case AuthErrorCode.emailAlreadyInUse.rawValue: authErr = .emailAlreadyInUse
+                case AuthErrorCode.weakPassword.rawValue:      authErr = .weakPassword
+                case AuthErrorCode.networkError.rawValue:      authErr = .networkError
+                default:                                       authErr = .unknown(nsError.localizedDescription)
                 }
                 completion(.failure(authErr))
                 return
             }
-            
-            // We got a new user object
+
+            // Created OK
             guard let user = result?.user else {
                 completion(.failure(.unknown("Could not retrieve created user")))
                 return
             }
-            
-            // Save their profile in Firestore, then forward that result
-            saveUserProfile(user: user, name: name, email: email) { saveResult in
-                switch saveResult {
-                case .success:
-                    // Profile write succeeded → done.
-                    completion(.success(()))
-                    
-                case .failure(let saveError):
-                    // Profile write failed → delete the just‐created Auth user to avoid a “ghost” account
-                    if let createdUser = Auth.auth().currentUser {
-                        createdUser.delete { _ in
-                            // Even if delete itself errors, bubble up the original saveError
-                            completion(.failure(saveError))
+
+            // 1) Put the name on the FirebaseAuth user (and refresh the cache)
+            updateAuthDisplayName(user, to: name) { nameErr in
+                if let nameErr = nameErr {
+                    // keep strong consistency: remove the auth user on failure
+                    user.delete { _ in completion(.failure(.profileSaveFailed(nameErr))) }
+                    return
+                }
+
+                // 2) Save to Firestore (your existing profile doc)
+                saveUserProfile(user: user, name: name, email: email) { saveResult in
+                    switch saveResult {
+                    case .failure(let saveError):
+                        user.delete { _ in completion(.failure(saveError)) }
+
+                    case .success:
+                        // 3) Fire a verification email. We DO NOT fail the flow if this send errs.
+                        //    We’ll let the verify screen handle resend.
+                        sendVerificationEmail { _ in
+                            completion(.success(()))
                         }
-                    } else {
-                        // No currentUser? Just forward the profile‐save error
-                        completion(.failure(saveError))
                     }
                 }
             }
         }
     }
-    
-    
+
+    /// Sends a verify-email to the *current* user.
+    static func sendVerificationEmail(completion: @escaping (Result<Void, AuthError>) -> Void) {
+        guard let user = Auth.auth().currentUser else {
+            completion(.failure(.unknown("No signed-in user")))
+            return
+        }
+
+        // You can pass ActionCodeSettings to bring users back to your app later.
+        // Keeping it simple: let Firebase use the default template & URL.
+        user.sendEmailVerification { error in
+            if let err = error as NSError? {
+                switch err.code {
+                case AuthErrorCode.networkError.rawValue: completion(.failure(.networkError))
+                case AuthErrorCode.tooManyRequests.rawValue: completion(.failure(.unknown("Too many attempts. Try later.")))
+                default: completion(.failure(.unknown(err.localizedDescription)))
+                }
+            } else {
+                completion(.success(()))
+            }
+        }
+    }
     
     static func signOut() {
         try? Auth.auth().signOut()
@@ -165,11 +184,13 @@ class AuthService {
             }
             
             if result.additionalUserInfo?.isNewUser == true {
-                let name = credential.fullName?.givenName ?? "User"
-                let email = credential.email ?? ""
-                saveUserProfile(user: result.user, name: name, email: email) { saveResult in
-                    // forward the saveResult (which is Result<Void,AuthError>)
-                    completion(saveResult)
+                let name = credential.fullName?.formatted() ?? "User"
+                let email = credential.email ?? result.user.email ?? ""
+
+                updateAuthDisplayName(result.user, to: name) { _ in
+                    saveUserProfile(user: result.user, name: name, email: email) { saveResult in
+                        completion(saveResult)
+                    }
                 }
             } else {
                 completion(.success(()))
@@ -208,12 +229,28 @@ class AuthService {
             if result.additionalUserInfo?.isNewUser == true {
                 let name = result.user.displayName ?? "User"
                 let email = result.user.email ?? ""
-                saveUserProfile(user: result.user, name: name, email: email) { saveResult in
-                    completion(saveResult)
+
+                updateAuthDisplayName(result.user, to: name) { _ in
+                    saveUserProfile(user: result.user, name: name, email: email) { saveResult in
+                        completion(saveResult)
+                    }
                 }
             } else {
                 completion(.success(()))
             }
+
+        }
+    }
+    
+    private static func updateAuthDisplayName(_ user: User,
+                                              to name: String,
+                                              completion: @escaping (Error?) -> Void) {
+        let change = user.createProfileChangeRequest()
+        change.displayName = name
+        change.commitChanges { err in
+            if let err = err { completion(err); return }
+            // Make sure the currentUser cache has the new name
+            user.reload { _ in completion(nil) }
         }
     }
     

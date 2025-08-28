@@ -445,7 +445,7 @@ class AccountsViewController: UIViewController {
     
     @objc private func openProfile() {
         HapticsManager.trigger(.selection)
-        let settingsVC = SettingsViewController(style: .insetGrouped)
+        let settingsVC = SettingsViewController()
         navigationController?.pushViewController(settingsVC, animated: true)
     }
     

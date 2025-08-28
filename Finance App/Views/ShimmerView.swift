@@ -33,7 +33,7 @@ class ShimmerView: UIView {
         gradientLayer.endPoint   = CGPoint(x: 1.0, y: 0.5)
         gradientLayer.locations  = [0, 0.5, 1]
         layer.addSublayer(gradientLayer)
-        startAnimating()
+//        startAnimating()
     }
 
     override func layoutSubviews() {

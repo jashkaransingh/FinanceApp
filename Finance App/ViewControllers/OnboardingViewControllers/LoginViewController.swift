@@ -133,7 +133,18 @@ class LoginViewController: BaseAuthViewController {
             
             switch result {
             case .success:
-                SceneDelegate.switchToMainApp()
+                SharedDataManager.shared.reloadUserProfile { result in
+                      DispatchQueue.main.async {
+                        switch result {
+                        case .success(let profile):
+                          print("✅ Loaded profile for \(profile.name)")
+                        case .failure(let error):
+                          print("❌ Failed to load profile:", error)
+                        }
+                        // 2️⃣ Now that the profile is in memory, go to the main app
+                        SceneDelegate.switchToMainApp()
+                      }
+                    }
             case .failure(let error):
                 let msg: String
                 switch error {

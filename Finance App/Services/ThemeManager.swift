@@ -7,27 +7,51 @@
 
 import UIKit
 
-final class ThemeManager {
-    // 1. Create a shared instance so we can access it from anywhere.
+class ThemeManager {
+    
+    // A shared instance for easy access
     static let shared = ThemeManager()
     
-    // 2. Keep the UserDefaults keys private to this class.
-    private let themeHasBeenSetKey = "userHasManuallySetTheme"
-    private let isDarkModeKey = "isDarkModeManuallySet"
+    // Enum to represent the different theme options
+    enum Theme: Int {
+        case system, light, dark
+    }
     
-    // 3. A private initializer prevents other parts of the app from creating a new instance.
-    private init() {}
-    
-    // 4. This method moves the logic from your SceneDelegate.
-    func applyInitialTheme(for window: UIWindow) {
-        // If the user has NEVER set a theme, sync the setting with the system's current style.
-        if !UserDefaults.standard.bool(forKey: themeHasBeenSetKey) {
-            let isSystemDark = window.traitCollection.userInterfaceStyle == .dark
-            UserDefaults.standard.set(isSystemDark, forKey: isDarkModeKey)
-        }
+    // The key to save the user's choice in UserDefaults
+     let themeKey = "appAppearance"
+
+    /// Applies the saved theme to the entire application window.
+    func applyInitialTheme(for window: UIWindow?) {
+        let savedTheme = UserDefaults.standard.integer(forKey: themeKey)
+        guard let theme = Theme(rawValue: savedTheme) else { return }
         
-        // Now apply the theme using the (now correct) stored value.
-        let isDarkModeOn = UserDefaults.standard.bool(forKey: isDarkModeKey)
-        window.overrideUserInterfaceStyle = isDarkModeOn ? .dark : .light
+        switch theme {
+        case .light:
+            window?.overrideUserInterfaceStyle = .light
+        case .dark:
+            window?.overrideUserInterfaceStyle = .dark
+        case .system:
+            // .unspecified tells the app to follow the system setting
+            window?.overrideUserInterfaceStyle = .unspecified
+        }
+    }
+    
+    /// A static version for convenience, used by the Appearance screen.
+    static func applyTheme() {
+        let savedTheme = UserDefaults.standard.integer(forKey: shared.themeKey)
+        guard let theme = Theme(rawValue: savedTheme) else { return }
+        
+        // Get the main app window to apply the theme
+        let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene
+        let window = windowScene?.windows.first
+        
+        switch theme {
+        case .light:
+            window?.overrideUserInterfaceStyle = .light
+        case .dark:
+            window?.overrideUserInterfaceStyle = .dark
+        case .system:
+            window?.overrideUserInterfaceStyle = .unspecified
+        }
     }
 }

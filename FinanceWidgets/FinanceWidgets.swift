@@ -29,7 +29,7 @@ struct BudgetEntry: TimelineEntry {
 // ─── Timeline Provider ─────────────────────────────────────────────────────────
 struct BudgetProvider: TimelineProvider {
     // Create an instance of the data manager to read shared data.
-    private let dataManager = SharedDataManager()
+    private let dataManager = WidgetDataManager()
 
     // The placeholder is for the widget gallery. This is fine to be hardcoded.
     func placeholder(in context: Context) -> BudgetEntry {

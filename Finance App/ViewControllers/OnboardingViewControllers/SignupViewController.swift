@@ -151,28 +151,28 @@ class SignupViewController: BaseAuthViewController {
                          message: "Please check your network and try again.")
             return
         }
-        
-        // 1) Trim whitespace/newlines
+
         let name     = nameField.textField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let email    = emailField.textField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let password = passwordField.textField.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        
-        // 2) Validate non-empty
+
         guard !name.isEmpty, !email.isEmpty, !password.isEmpty else {
-            presentAlert(title: "Missing Information",
-                         message: "Please fill out all fields.")
+            presentAlert(title: "Missing Information", message: "Please fill out all fields.")
             return
         }
-        
-        // 3) (You already validate email format and password strength below)
+
         setLoading(true)
         AuthService.register(email: email, password: password, name: name) { [weak self] result in
             guard let self = self else { return }
             self.setLoading(false)
-            
+
             switch result {
             case .success:
-                SceneDelegate.switchToMainApp()
+                // ✅ Account exists and we asked Firebase to send the verification email.
+                // Take the user to the verify screen.
+                let vc = VerifyEmailViewController(email: email)
+                self.navigationController?.pushViewController(vc, animated: true)
+
             case .failure(let error):
                 let message: String
                 switch error {
@@ -191,7 +191,6 @@ class SignupViewController: BaseAuthViewController {
             }
         }
     }
-    
     
     @objc private func goToLogin() {
         navigationController?.popViewController(animated: true)

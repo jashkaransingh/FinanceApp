@@ -78,9 +78,15 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Models/SummaryEntry.swift,
-				Services/SharedDataManager.swift,
 			);
 			target = 413EA3802DEE44D400545123 /* FinanceWidgetsExtension */;
+		};
+		41A64D362E4561B3007553A0 /* Exceptions for "FinanceWidgets" folder in "Finance App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				WidgetDataManager.swift,
+			);
+			target = 41C5E7292DB49EA1005392C0 /* Finance App */;
 		};
 		41C5E7522DB49EA3005392C0 /* Exceptions for "Finance App" folder in "Finance App" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -95,6 +101,7 @@
 		413EA3842DEE44D400545123 /* FinanceWidgets */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				41A64D362E4561B3007553A0 /* Exceptions for "FinanceWidgets" folder in "Finance App" target */,
 				413EA3962DEE44D500545123 /* Exceptions for "FinanceWidgets" folder in "FinanceWidgetsExtension" target */,
 			);
 			path = FinanceWidgets;
