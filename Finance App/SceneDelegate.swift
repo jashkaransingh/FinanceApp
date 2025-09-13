@@ -12,6 +12,62 @@ import LocalAuthentication
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
+    
+    private static var isSwitchingRoot = false
+    
+    // Reuse one place to build the main tab bar
+    private static func makeMainTabBar() -> UITabBarController {
+        let accountsVC = AccountsViewController()
+        let nav1 = UINavigationController(rootViewController: accountsVC)
+        nav1.tabBarItem = UITabBarItem(title: nil, image: UIImage(systemName: "creditcard.fill"), tag: 0)
+
+        let historyVC = HistoryViewController()
+        let nav2 = UINavigationController(rootViewController: historyVC)
+        nav2.tabBarItem = UITabBarItem(title: nil, image: UIImage(systemName: "clock"), tag: 1)
+
+        let tabBar = MainTabBarController()
+        tabBar.viewControllers = [nav1, nav2]
+        tabBar.tabBar.tintColor = .label
+        tabBar.tabBar.unselectedItemTintColor = .secondaryLabel
+        return tabBar
+    }
+
+    // Decide if we’re already showing the same logical root
+    private static func isSameRoot(current: UIViewController?, new: UIViewController) -> Bool {
+        switch (current, new) {
+        case (is MainTabBarController, is MainTabBarController):
+            return true
+        case (is OnboardingViewController, is OnboardingViewController):
+            return true
+        case (let cur as UINavigationController, let nxt as UINavigationController):
+            let curRoot = cur.viewControllers.first
+            let nxtRoot = nxt.viewControllers.first
+            return (curRoot is LoginViewController) && (nxtRoot is LoginViewController)
+        default:
+            return false
+        }
+    }
+
+    // One safe way to perform the swap
+    private static func safelySetRoot(_ newRoot: UIViewController, on window: UIWindow) {
+        onMain {
+            // no-op if the same root type is already active
+            if isSameRoot(current: window.rootViewController, new: newRoot) { return }
+            // avoid overlapping transitions
+            if isSwitchingRoot { return }
+            isSwitchingRoot = true
+
+            // clean up any presented VC / keyboard
+            window.rootViewController?.dismiss(animated: false)
+            window.endEditing(true)
+
+            UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve, animations: {
+                window.rootViewController = newRoot
+            }, completion: { _ in
+                isSwitchingRoot = false
+            })
+        }
+    }
 
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
@@ -45,62 +101,33 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
               let delegate = windowScene.delegate as? SceneDelegate,
               let window = delegate.window else { return }
 
-        let accountsVC = AccountsViewController()
-        let nav1 = UINavigationController(rootViewController: accountsVC)
-        nav1.tabBarItem = UITabBarItem(title: nil, image: UIImage(systemName: "creditcard.fill"), tag: 0)
-
-        let historyVC = HistoryViewController()
-        let nav2 = UINavigationController(rootViewController: historyVC)
-        nav2.tabBarItem = UITabBarItem(title: nil, image: UIImage(systemName: "clock"), tag: 1)
-
-        let tabBar = MainTabBarController()
-        tabBar.viewControllers = [nav1, nav2]
-        tabBar.tabBar.tintColor = .label
-        tabBar.tabBar.unselectedItemTintColor = .secondaryLabel
-
-        UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve, animations: {
-            window.rootViewController = tabBar
-        })
+        let tabBar = makeMainTabBar()
+        safelySetRoot(tabBar, on: window)
     }
 
+
     static func switchToLogin() {
-            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let delegate = windowScene.delegate as? SceneDelegate,
-                  let window = delegate.window else { return }
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let delegate = windowScene.delegate as? SceneDelegate,
+              let window = delegate.window else { return }
 
-            let rootVC: UIViewController
+        let rootVC: UIViewController
 
-            // Decide which screen to show
-            if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") == false {
-                // 1. User has NOT seen onboarding yet
-                rootVC = OnboardingViewController()
-            } else if AuthService.isSignedIn() {
-                // 2. User HAS seen onboarding and IS logged in
-                // We can reuse the existing switchToMainApp logic, but we need the main TabBar
-                let accountsVC = AccountsViewController()
-                let nav1 = UINavigationController(rootViewController: accountsVC)
-                nav1.tabBarItem = UITabBarItem(title: nil, image: UIImage(systemName: "creditcard.fill"), tag: 0)
-
-                let historyVC = HistoryViewController()
-                let nav2 = UINavigationController(rootViewController: historyVC)
-                nav2.tabBarItem = UITabBarItem(title: nil, image: UIImage(systemName: "clock"), tag: 1)
-
-                let tabBar = MainTabBarController()
-                tabBar.viewControllers = [nav1, nav2]
-                tabBar.tabBar.tintColor = .label
-                tabBar.tabBar.unselectedItemTintColor = .secondaryLabel
-                rootVC = tabBar
-            } else {
-                // 3. User HAS seen onboarding and is NOT logged in
-                let loginVC = LoginViewController()
-                rootVC = UINavigationController(rootViewController: loginVC)
-            }
-
-            // Set the root view controller with a transition
-            UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve, animations: {
-                window.rootViewController = rootVC
-            })
+        if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") == false {
+            // Onboarding
+            rootVC = OnboardingViewController()
+        } else if AuthService.isSignedIn() {
+            // Already signed in -> main app
+            rootVC = makeMainTabBar()
+        } else {
+            // Login
+            let loginVC = LoginViewController()
+            rootVC = UINavigationController(rootViewController: loginVC)
         }
+
+        safelySetRoot(rootVC, on: window)
+    }
+
 
 
     func sceneDidDisconnect(_ scene: UIScene) {
@@ -113,6 +140,17 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneDidBecomeActive(_ scene: UIScene) {
         // Called when the scene has moved from an inactive state to an active state.
         // Use this method to restart any tasks that were paused (or not yet started) when the scene was inactive.
+        
+        if UserDefaults.standard.bool(forKey: "shouldSwitchToLoginAfterSettings") {
+            UserDefaults.standard.set(false, forKey: "shouldSwitchToLoginAfterSettings")
+            SceneDelegate.switchToLogin()
+        }
+        
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            if settings.authorizationStatus == .authorized {
+                NotificationService.shared.refreshDailySummaryNotification()
+            }
+        }
     }
 
     func sceneWillResignActive(_ scene: UIScene) {

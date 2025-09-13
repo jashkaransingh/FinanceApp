@@ -15,7 +15,7 @@ final class ProfileSettingsViewController: UITableViewController {
     private let gradientBackground = GradientBackgroundView()
     private let headerCard = GlassCardView(
         appearance: UITraitCollection.current.userInterfaceStyle == .dark
-        ? .glass(dark: true, dimming: 0.22)
+           ? .glass(dark: true, dimming: Design.Glass.cardDimming)
         : .solid
     )
     
@@ -23,6 +23,8 @@ final class ProfileSettingsViewController: UITableViewController {
     private let formView = ProfileFormView()
     private var headerContainer: UIView?            // <- new: reuse header container
     private var deleteFooterContainer: UIView?
+    private var initialVerified: Bool = false
+    private var didLayoutOnce = false
     
     // MARK: - State
     private var initialName: String = ""
@@ -49,13 +51,18 @@ final class ProfileSettingsViewController: UITableViewController {
         navigationController?.navigationBar.prefersLargeTitles = true
         navigationItem.rightBarButtonItem = editItem
         
+        view.backgroundColor = Design.Surface.page
+        tableView.backgroundColor = Design.Surface.page
+        gradientBackground.backgroundColor = Design.Surface.page
         tableView.separatorStyle = .none
         tableView.keyboardDismissMode = .interactive
         tableView.backgroundView = gradientBackground
-        gradientBackground.alpha = 0.06
+        gradientBackground.alpha = Design.Alpha.gradientBackground
         if #available(iOS 15.0, *) { tableView.sectionHeaderTopPadding = 0 }
         
-        tableView.tableFooterView = UIView(frame: .zero)
+        tableView.estimatedRowHeight = 0
+        tableView.estimatedSectionHeaderHeight = 0
+        tableView.estimatedSectionFooterHeight = 0
         mountHeaderIfNeeded()           // mount once
         buildHeader()                   // paint immediately, refresh in background
         installKeyboardDismissTap()
@@ -70,19 +77,34 @@ final class ProfileSettingsViewController: UITableViewController {
         super.viewWillDisappear(animated)
         gradientBackground.pauseAnimation()
     }
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationItem.largeTitleDisplayMode = .always
+    }
+
+
     
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         guard traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) else { return }
         let isDark = traitCollection.userInterfaceStyle == .dark
-        headerCard.setAppearance(isDark ? .glass(dark: true, dimming: 0.22) : .solid)
+        headerCard.setAppearance(isDark ? .glass(dark: true, dimming: Design.Glass.cardDimming) : .solid)
     }
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        tableView.relayoutTableHeaderIfNeeded()
-        relayoutDeleteFooterToBottom()
+        guard !didLayoutOnce else { return }
+        didLayoutOnce = true
+        // Now that insets are final, size header & footer before first paint
+        tableView.relayoutTableHeaderIfNeeded(noAnimation: true)
+        relayoutDeleteFooterToBottom(noAnimation: true)
     }
+
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        didLayoutOnce = false
+    }
+
     
     // MARK: - Header (mount once)
     private func mountHeaderIfNeeded() {
@@ -104,21 +126,33 @@ final class ProfileSettingsViewController: UITableViewController {
         container.addSubview(headerCard)
         headerCard.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            headerCard.topAnchor.constraint(equalTo: container.topAnchor, constant: 20),
-            headerCard.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            headerCard.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
-            headerCard.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8)
+            headerCard.topAnchor.constraint(equalTo: container.topAnchor, constant: Design.Space.md),      // 16
+            headerCard.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: Design.Space.md),
+            headerCard.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -Design.Space.md),
+            headerCard.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -Design.Space.md)
         ])
         container.layoutIfNeeded()
-        container.frame.size.height = container.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).height
+        let target = CGSize(width: tableView.bounds.width,
+                            height: UIView.layoutFittingCompressedSize.height)
+        container.frame.size.width = target.width
+        container.frame.size.height = container.systemLayoutSizeFitting(target).height
+
         
         tableView.tableHeaderView = container
         headerContainer = container
         
         // Handlers
-        formView.onChange = { [weak self] in self?.updateSaveEnabled() }
         formView.onChangePassword = { [weak self] in
-            self?.navigationController?.pushViewController(ChangePasswordViewController(), animated: true)
+            guard let self = self else { return }
+            let vc = ResetPasswordViewController()
+
+            // Pre-fill email if we have it
+            let emailFromForm = self.formView.email
+            vc.prefillEmail = emailFromForm.isEmpty
+                ? Auth.auth().currentUser?.email
+                : emailFromForm
+
+            self.navigationController?.pushViewController(vc, animated: true)
         }
     }
     
@@ -126,9 +160,16 @@ final class ProfileSettingsViewController: UITableViewController {
     private func applyHeader(name: String, email: String, verified: Bool) {
         initialName  = name
         initialEmail = email
+        initialVerified = verified
         formView.configure(name: name, email: email, isEmailVerified: verified)
-        formView.setEditing(false)
+        if !isEditingProfile { formView.setEditing(false) }
+
+        // Keep header/footers in sync if content height changed
+        tableView.relayoutTableHeaderIfNeeded(noAnimation: true)
+        relayoutDeleteFooterToBottom(noAnimation: true)
     }
+
+
     
     private func buildHeader() {
         guard let user = Auth.auth().currentUser else { return }
@@ -138,7 +179,7 @@ final class ProfileSettingsViewController: UITableViewController {
         let nameNow  = (user.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 }
         ?? loadCachedName()
         ?? ""
-        applyHeader(name: nameNow, email: emailNow, verified: user.isEmailVerified)
+        applyHeader(name: nameNow, email: emailNow, verified: true)
         
         // 2) Background refresh (cache → server). No blocking.
         let doc = Firestore.firestore().collection("users").document(user.uid)
@@ -147,7 +188,7 @@ final class ProfileSettingsViewController: UITableViewController {
         doc.getDocument(source: .cache) { [weak self] snap, _ in
             guard let self = self else { return }
             if let cached = snap?.data()?["name"] as? String, !cached.isEmpty, cached != self.initialName {
-                self.applyHeader(name: cached, email: emailNow, verified: user.isEmailVerified)
+                self.applyHeader(name: cached, email: emailNow, verified: true)
                 self.cacheName(cached)
             }
             
@@ -155,7 +196,7 @@ final class ProfileSettingsViewController: UITableViewController {
             doc.getDocument { [weak self] snap, _ in
                 guard let self = self else { return }
                 if let remote = snap?.data()?["name"] as? String, !remote.isEmpty, remote != self.initialName {
-                    self.applyHeader(name: remote, email: emailNow, verified: user.isEmailVerified)
+                    self.applyHeader(name: remote, email: emailNow, verified: true)
                     self.cacheName(remote)
                 }
             }
@@ -164,7 +205,7 @@ final class ProfileSettingsViewController: UITableViewController {
         // Optional: refresh email verification in the background
         user.reload { [weak self] _ in
             guard let self = self else { return }
-            self.applyHeader(name: self.initialName, email: emailNow, verified: user.isEmailVerified)
+            self.applyHeader(name: self.initialName, email: emailNow, verified: true)
         }
     }
     
@@ -180,9 +221,14 @@ final class ProfileSettingsViewController: UITableViewController {
         cfg.baseForegroundColor = .systemRed
         cfg.contentInsets = .init(top: 16, leading: 12, bottom: 16, trailing: 12)
         button.configuration = cfg
-        button.backgroundColor = .secondarySystemGroupedBackground
-        button.layer.cornerRadius = 18
+        button.backgroundColor = Design.Surface.card
+        button.layer.cornerCurve = Design.cornerCurve
+        button.heightAnchor.constraint(equalToConstant: Design.Row.height).isActive = true
+        button.layer.cornerRadius = Design.Radius.capsule // 16 – matches GlassCardView
+        button.layer.borderWidth = 0
         button.layer.masksToBounds = true
+        button.layer.borderColor = Design.Hairline.color.cgColor
+
         button.addTarget(self, action: #selector(deleteAccountTapped), for: .touchUpInside)
         
         let spacer = UIView()
@@ -197,15 +243,18 @@ final class ProfileSettingsViewController: UITableViewController {
         
         container.addSubview(vstack)
         NSLayoutConstraint.activate([
-            vstack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            vstack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
-            vstack.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
-            vstack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -20),
-            button.heightAnchor.constraint(equalToConstant: 56)
+            vstack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: Design.Space.md),   // 16
+            vstack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -Design.Space.md),
+            vstack.topAnchor.constraint(equalTo: container.topAnchor, constant: Design.Space.sm),          // 12 (keeps a little air)
+            vstack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -Design.Space.md),
+
         ])
         
         container.frame.size.height = 96
-        tableView.tableFooterView = container
+        UIView.performWithoutAnimation {
+            self.tableView.tableFooterView = container
+        }
+        relayoutDeleteFooterToBottom(noAnimation: true)
     }
     
     @objc private func deleteAccountTapped() {
@@ -281,20 +330,26 @@ final class ProfileSettingsViewController: UITableViewController {
         }
     }
     
-    private func relayoutDeleteFooterToBottom() {
+    private func relayoutDeleteFooterToBottom(noAnimation: Bool = false) {
         guard let footer = deleteFooterContainer else { return }
+
         let visibleHeight = tableView.bounds.height
-        - tableView.adjustedContentInset.top
-        - tableView.adjustedContentInset.bottom
+            - tableView.adjustedContentInset.top
+            - tableView.adjustedContentInset.bottom
         let headerHeight = tableView.tableHeaderView?.frame.height ?? 0
-        let minFooter: CGFloat = 96
-        let needed = max(minFooter, visibleHeight - headerHeight)
-        
-        if abs(footer.frame.height - needed) > 0.5 {
+        let needed = max(96, visibleHeight - headerHeight)
+
+        guard abs(footer.frame.height - needed) > 0.5 else { return }
+
+        let apply = { [weak self] in
+            guard let self = self else { return }
             footer.frame.size.height = needed
-            tableView.tableFooterView = footer
+            self.tableView.tableFooterView = footer
+            self.tableView.layoutIfNeeded()
         }
+        noAnimation ? UIView.performWithoutAnimation(apply) : apply()
     }
+
     
     // MARK: - Minimal table (header only)
     override func numberOfSections(in tableView: UITableView) -> Int { 0 }
@@ -338,7 +393,7 @@ final class ProfileSettingsViewController: UITableViewController {
 }
 
 // MARK: - Helpers
-private final class PaddingLabel: UILabel {
+final class PaddingLabel: UILabel {
     let insets: UIEdgeInsets
     init(insets: UIEdgeInsets) { self.insets = insets; super.init(frame: .zero) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -351,19 +406,29 @@ private final class PaddingLabel: UILabel {
 }
 
 private extension UITableView {
-    func relayoutTableHeaderIfNeeded() {
+    func relayoutTableHeaderIfNeeded(noAnimation: Bool = false) {
         guard let header = tableHeaderView else { return }
+
         header.setNeedsLayout()
         header.layoutIfNeeded()
+
         let size = header.systemLayoutSizeFitting(
-            CGSize(width: bounds.width, height: UIView.layoutFittingCompressedSize.height)
+            CGSize(width: bounds.width,
+                   height: UIView.layoutFittingCompressedSize.height)
         )
-        if header.frame.height != size.height {
+
+        guard header.frame.height != size.height else { return }
+
+        let apply = { [weak self] in
+            guard let self = self else { return }
             header.frame.size.height = size.height
-            tableHeaderView = header
+            self.tableHeaderView = header
+            self.layoutIfNeeded()
         }
+        noAnimation ? UIView.performWithoutAnimation(apply) : apply()
     }
 }
+
 
 
 

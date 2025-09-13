@@ -14,7 +14,7 @@ class AuthTextField: UIView {
     
     let iconImageView: UIImageView = {
         let iv = UIImageView()
-        iv.contentMode = .scaleAspectFit
+        iv.contentMode = .center
         iv.tintColor = .secondaryLabel
         return iv
     }()
@@ -47,9 +47,7 @@ class AuthTextField: UIView {
     init(icon: UIImage?, isSecure: Bool = false) {
         super.init(frame: .zero)
         iconImageView.image = icon
-        textField.keyboardType = isSecure
-        ? .default
-        : .emailAddress      // for non-secure we’ll assume email by default
+        textField.keyboardType = .default
         
         textField.autocapitalizationType = .none
         textField.autocorrectionType     = .no
@@ -80,37 +78,40 @@ class AuthTextField: UIView {
     
     private func setupView() {
         backgroundColor = .clear
-        
-        // bottom line (stored, not local)
+
         bottomLine.backgroundColor = .separator
         addSubview(bottomLine)
         bottomLine.translatesAutoresizingMaskIntoConstraints = false
-        
+
         let stackView = UIStackView(arrangedSubviews: [iconImageView, textField])
         stackView.spacing = 10
         addSubview(stackView)
         stackView.translatesAutoresizingMaskIntoConstraints = false
-        
+
+        iconImageView.translatesAutoresizingMaskIntoConstraints = false
         iconImageView.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         iconImageView.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
-        
-        // NEW: keep a reference to the height constraint so we can set it to 0
+
         bottomLineHeight = bottomLine.heightAnchor.constraint(equalToConstant: 1)
-        
+
         NSLayoutConstraint.activate([
-            iconImageView.widthAnchor.constraint(equalToConstant: 22),
-            
+            // Icon standardized box
+            iconImageView.widthAnchor.constraint(equalToConstant: 20),   // was 22
+            iconImageView.heightAnchor.constraint(equalToConstant: 20),
+
+            // Remove the old 12pt internal margins so outer container controls the 16pt
             stackView.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-            stackView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            stackView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            stackView.leadingAnchor.constraint(equalTo: leadingAnchor),          // was +12
+            stackView.trailingAnchor.constraint(equalTo: trailingAnchor),        // was -12
             stackView.bottomAnchor.constraint(equalTo: bottomLine.topAnchor, constant: -8),
-            
+
             bottomLine.bottomAnchor.constraint(equalTo: bottomAnchor),
             bottomLine.leadingAnchor.constraint(equalTo: leadingAnchor),
             bottomLine.trailingAnchor.constraint(equalTo: trailingAnchor),
             bottomLineHeight
         ])
     }
+
     var iconTintColor: UIColor? {
         get { iconImageView.tintColor }
         set { iconImageView.tintColor = newValue }

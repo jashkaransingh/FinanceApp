@@ -56,12 +56,12 @@ class SettingsViewController: UIViewController {
     
     private lazy var versionRow: SettingsRowView = {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-        let build = Bundle.main.object(forInfoDictionaryKey: kCFBundleVersionKey as String) as? String ?? "1"
+        
         return SettingsRowView(
             icon: UIImage(systemName: "info.circle.fill"),
             iconBackgroundColor: .systemGray,
             title: "Version",
-            accessoryType: .detail("\(version) (\(build))")
+            accessoryType: .detail("\(version)")
         )
     }()
     
@@ -79,7 +79,7 @@ class SettingsViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Settings"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = Design.Surface.page
         
         configureLayout()
         populateStackView()
@@ -107,7 +107,7 @@ class SettingsViewController: UIViewController {
     private func applyOpaqueNavBarAppearance() {
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = .systemBackground
+        appearance.backgroundColor = Design.Surface.page
         appearance.titleTextAttributes = [.foregroundColor: UIColor.label]
         appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.label]
         
@@ -119,7 +119,7 @@ class SettingsViewController: UIViewController {
     
     private func populateStackView() {
         let isDarkMode = self.traitCollection.userInterfaceStyle == .dark
-        let cardAppearance: GlassCardView.Appearance = isDarkMode ? .glass(dark: true, dimming: 0.22) : .solid
+        let cardAppearance: GlassCardView.Appearance = isDarkMode ? .glass(dark: true, dimming: Design.Glass.cardDimming) : .solid
         
         // --- Profile Section ---
         let newProfileCard = GlassCardView(appearance: cardAppearance)
@@ -185,7 +185,7 @@ class SettingsViewController: UIViewController {
 
         // Compute the new look
         let isDarkMode = traitCollection.userInterfaceStyle == .dark
-        let newAppearance: GlassCardView.Appearance = isDarkMode ? .glass(dark: true, dimming: 0.22) : .solid
+        let newAppearance: GlassCardView.Appearance = isDarkMode ? .glass(dark: true, dimming: Design.Glass.cardDimming) : .solid
 
         // Restyle existing cards in place (no flicker, no gesture re-wiring)
         for view in mainStackView.arrangedSubviews {
@@ -230,10 +230,9 @@ class SettingsViewController: UIViewController {
         let v = UIView()
         v.backgroundColor = .separator
         v.translatesAutoresizingMaskIntoConstraints = false
-        v.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        v.heightAnchor.constraint(equalToConstant: Design.Hairline.width).isActive = true
         return v
     }
-    
     
     // MARK: - Actions
     
@@ -243,7 +242,7 @@ class SettingsViewController: UIViewController {
     }
     
     @objc private func changePasswordTapped() {
-        let vc = ChangePasswordViewController()
+        let vc = ResetPasswordViewController()
         navigationController?.pushViewController(vc, animated: true)
     }
     
@@ -268,15 +267,15 @@ class SettingsViewController: UIViewController {
         appLockRow.setSwitch(isOn: next, animated: true, sendEvent: true)
     }
     @objc private func versionTapped() {
-        let nav = UINavigationController(rootViewController: VersionInfoViewController())
-        nav.modalPresentationStyle = .pageSheet
-        present(nav, animated: true)
+        VersionInfoViewController.presentCompact(from: self)
     }
+
 
     
     private func configureLayout() {
         view.addSubview(gradientBackground)
         gradientBackground.alpha = 0.08
+        gradientBackground.alpha = Design.Alpha.gradientBackground
         gradientBackground.translatesAutoresizingMaskIntoConstraints = false
         
         view.addSubview(scrollView)

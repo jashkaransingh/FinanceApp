@@ -16,6 +16,7 @@ class SignupViewController: BaseAuthViewController {
     private let signupButton = PrimaryButton(title: "Create Account")
     private let switchToLoginButton = LinkButton(title: "Already have an account? Log In")
     private var validationWorkItem: DispatchWorkItem?
+    private var isSubmitting = false
     
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -23,6 +24,7 @@ class SignupViewController: BaseAuthViewController {
         configureNavigationBar()
         configureUI()
         updateSignupButtonState()
+        updateNameFieldUI()
         updatePasswordRequirementsUI()
         updateEmailFieldUI()
         setupLayout()
@@ -56,9 +58,18 @@ class SignupViewController: BaseAuthViewController {
         nameField.textField.placeholder = "Full Name"
         emailField.textField.placeholder = "Email"
         passwordField.textField.placeholder = "Password"
-        nameField.textField.textContentType = .namePrefix
-        passwordField.textField.textContentType = .password
+        nameField.textField.textContentType = .name
+        nameField.textField.autocapitalizationType = .words
+        emailField.textField.keyboardType = .emailAddress
         emailField.textField.textContentType = .emailAddress
+
+        // Password: use .newPassword on signup to trigger strong suggestions
+        passwordField.textField.textContentType = .newPassword
+
+        // Optional: only enable return when there’s text
+        nameField.textField.enablesReturnKeyAutomatically = true
+        emailField.textField.enablesReturnKeyAutomatically = true
+        passwordField.textField.enablesReturnKeyAutomatically = true
     }
     
     private let passwordRequirementsLabel: UILabel = {
@@ -68,55 +79,38 @@ class SignupViewController: BaseAuthViewController {
         lbl.font = UIFont.preferredFont(forTextStyle: .subheadline)
         lbl.adjustsFontForContentSizeCategory = true
         lbl.textColor = .secondaryLabel
-        lbl.text = """
-          • 8+ characters
-          • 1 uppercase
-          • 1 number
-          • 1 special character
-          """
         return lbl
     }()
     
+    private func updateNameFieldUI() {
+        let valid = nameField.textField.text?.isValidSimpleName ?? false
+        nameField.iconTintColor = valid ? .systemGreen : .secondaryLabel
+    }
+    
     private func updateSignupButtonState() {
-        let nameOK  = !(nameField.textField.text ?? "").isEmpty
+        let nameOK  = nameField.textField.text?.isValidSimpleName ?? false
         let emailOK = emailField.textField.text?.isValidEmail() ?? false
-        let passOK  = passwordField.textField.text?.isValidPassword() ?? false
-        
+        let pass    = passwordField.textField.text ?? ""
+        let passOK  = PasswordRules.evaluate(pass).valid
         signupButton.isEnabled = nameOK && emailOK && passOK
     }
     private func updatePasswordRequirementsUI() {
-        guard let pw = passwordField.textField.text else { return }
-        
-        // Define each rule’s text + pass/fail
-        let rules = [
-            ("8+ characters",       pw.count >= 8),
-            ("1 uppercase",         pw.range(of: "[A-Z]", options: .regularExpression) != nil),
-            ("1 number",            pw.range(of: "\\d", options: .regularExpression) != nil),
-            ("1 special character", pw.range(of: "[^A-Za-z0-9]", options: .regularExpression) != nil)
-        ]
-        
+        let pw = passwordField.textField.text ?? ""
+        let result = PasswordRules.evaluate(pw)
+
         let full = NSMutableAttributedString()
-        // Choose a smaller Dynamic Type text style
         let textStyle: UIFont.TextStyle = .footnote
         let metrics = UIFontMetrics(forTextStyle: textStyle)
-        
-        for (text, passed) in rules {
-            let check = passed ? "✓" : "•"
-            let color: UIColor = passed ? .systemGreen : .secondaryLabel
-            // Scale the base Dynamic Type font
-            let baseFont = UIFont.preferredFont(forTextStyle: textStyle)
-            let font = metrics.scaledFont(for: baseFont)
-            
-            let piece = NSAttributedString(
-                string: "\(check) \(text)\n",
-                attributes: [
-                    .foregroundColor: color,
-                    .font: font
-                ]
-            )
-            full.append(piece)
+        let baseFont = UIFont.preferredFont(forTextStyle: textStyle)
+        let font = metrics.scaledFont(for: baseFont)
+
+        for rule in result.checks {
+            let check = rule.passed ? "✓" : "•"
+            let color: UIColor = rule.passed ? .systemGreen : .secondaryLabel
+            full.append(NSAttributedString(string: "\(check) \(rule.label)\n",
+                                           attributes: [.foregroundColor: color, .font: font]))
         }
-        
+
         passwordRequirementsLabel.attributedText = full
     }
     
@@ -146,9 +140,16 @@ class SignupViewController: BaseAuthViewController {
     
     // MARK: - Actions
     @objc private func handleSignup() {
+        
+        guard !isSubmitting else { return }
+        isSubmitting = true
+        signupButton.isEnabled = false
+        
         if !NetworkMonitor.shared.isConnected {
             presentAlert(title: "No Internet Connection",
                          message: "Please check your network and try again.")
+            isSubmitting = false
+            updateSignupButtonState()   // re-enables only if inputs are valid
             return
         }
 
@@ -158,36 +159,33 @@ class SignupViewController: BaseAuthViewController {
 
         guard !name.isEmpty, !email.isEmpty, !password.isEmpty else {
             presentAlert(title: "Missing Information", message: "Please fill out all fields.")
+            isSubmitting = false
+            updateSignupButtonState()
             return
         }
 
         setLoading(true)
         AuthService.register(email: email, password: password, name: name) { [weak self] result in
             guard let self = self else { return }
-            self.setLoading(false)
-
-            switch result {
-            case .success:
-                // ✅ Account exists and we asked Firebase to send the verification email.
-                // Take the user to the verify screen.
-                let vc = VerifyEmailViewController(email: email)
-                self.navigationController?.pushViewController(vc, animated: true)
-
-            case .failure(let error):
-                let message: String
-                switch error {
-                case .weakPassword:
-                    message = "Your password is too weak—please add uppercase letters, numbers, and special characters."
-                case .emailAlreadyInUse:
-                    message = "An account with this email already exists."
-                case .networkError:
-                    message = "Network error—please check your connection and try again."
-                case .unknown(let description):
-                    message = description
-                default:
-                    message = "Registration failed. Please try again."
+            onMain {
+                self.setLoading(false)
+                self.isSubmitting = false
+                switch result {
+                case .success:
+                    let vc = VerifyEmailViewController(email: email)
+                    self.navigationController?.pushViewController(vc, animated: true)
+                case .failure(let error):
+                    let message: String
+                    switch error {
+                    case .weakPassword:         message = "Your password is too weak—please add uppercase letters, numbers, and special characters."
+                    case .emailAlreadyInUse:    message = "An account with this email already exists."
+                    case .networkError:         message = "Network error—please check your connection and try again."
+                    case .unknown(let desc):    message = desc
+                    default:                    message = "Registration failed. Please try again."
+                    }
+                    self.presentAlert(title: "Registration Failed", message: message)
+                    self.updateSignupButtonState()
                 }
-                self.presentAlert(title: "Registration Failed", message: message)
             }
         }
     }
@@ -204,8 +202,15 @@ class SignupViewController: BaseAuthViewController {
             self?.updateSignupButtonState()
             self?.updatePasswordRequirementsUI()
             self?.updateEmailFieldUI()
+            self?.updateNameFieldUI()
         }
         validationWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+    }
+}
+
+extension String {
+    var isValidSimpleName: Bool {
+        return trimmingCharacters(in: .whitespacesAndNewlines).count >= 3
     }
 }

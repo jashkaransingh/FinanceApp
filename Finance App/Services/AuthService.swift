@@ -130,11 +130,40 @@ class AuthService {
         return Auth.auth().currentUser != nil
     }
     
-    static func resetPassword(email: String, completion: @escaping (Bool) -> Void) {
-        Auth.auth().sendPasswordReset(withEmail: email) { error in
-            completion(error == nil)
+    static func resetPassword(email: String,
+                              completion: @escaping (Result<Void, AuthError>) -> Void) {
+        let auth = Auth.auth()
+        
+        // Localize Firebase’s email template to the user’s language.
+        auth.languageCode = Locale.preferredLanguages.first
+        
+        // If you later add Dynamic Links, swap to the ActionCodeSettings version below.
+        auth.sendPasswordReset(withEmail: email) { error in
+            if let err = error as NSError? {
+                completion(.failure(mapFirebaseError(err)))
+            } else {
+                completion(.success(()))
+            }
         }
     }
+    
+    private static func mapFirebaseError(_ nsError: NSError) -> AuthError {
+        switch nsError.code {
+        case AuthErrorCode.networkError.rawValue:
+            return .networkError
+        case AuthErrorCode.tooManyRequests.rawValue:
+            return .unknown("Too many attempts. Try later.")
+        case AuthErrorCode.invalidEmail.rawValue,
+             AuthErrorCode.userNotFound.rawValue,
+             AuthErrorCode.invalidRecipientEmail.rawValue:
+            // We’ll still show a generic “Email sent” in the UI to avoid enumeration,
+            // but mapping to a concrete case can help with logging/metrics.
+            return .userNotFound
+        default:
+            return .unknown(nsError.localizedDescription)
+        }
+    }
+
     
     // MARK: - New Social Sign-In Methods
     

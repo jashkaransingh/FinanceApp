@@ -8,18 +8,19 @@
 import UIKit
 
 enum LegalDocument: String {
-    case terms = "TermsOfUse"
+    case terms   = "TermsOfUse"     // <- your file name
     case privacy = "PrivacyPolicy"
 
     var title: String {
         switch self {
-        case .terms: return "Terms of Use"
+        case .terms:   return "Terms of Service"
         case .privacy: return "Privacy Policy"
         }
     }
 }
 
 final class LegalTextViewController: UIViewController {
+
     private let document: LegalDocument
     private let textView = UITextView()
 
@@ -34,10 +35,15 @@ final class LegalTextViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
 
+        // UITextView setup
         textView.isEditable = false
+        textView.isSelectable = true
         textView.alwaysBounceVertical = true
         textView.adjustsFontForContentSizeCategory = true
-        textView.textContainerInset = UIEdgeInsets(top: 16, left: 16, bottom: 32, right: 16)
+        textView.textContainerInset = UIEdgeInsets(top: 20, left: 20, bottom: 32, right: 20)
+        textView.textContainer.lineFragmentPadding = 0
+        textView.dataDetectorTypes = [.link, .phoneNumber]
+        textView.linkTextAttributes = [.foregroundColor: UIColor.link]
         view.addSubview(textView)
         textView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -47,25 +53,55 @@ final class LegalTextViewController: UIViewController {
             textView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
-        loadMarkdown()
+        renderMarkdown()
     }
 
-    private func loadMarkdown() {
-        guard let url = Bundle.main.url(forResource: document.rawValue, withExtension: "md"),
-              let md = try? String(contentsOf: url) else {
+    private func renderMarkdown() {
+        guard
+            let url = Bundle.main.url(forResource: document.rawValue, withExtension: "md"),
+            var md  = try? String(contentsOf: url, encoding: .utf8)
+        else {
             textView.text = "Missing \(document.title) file."
+            textView.font = .preferredFont(forTextStyle: .body)
             return
         }
+
+        // Normalize newlines so paragraphs/headings don’t “jam” together
+        md = md.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+
         if #available(iOS 15.0, *) {
-            // Render Markdown with Dynamic Type
-            if let att = try? AttributedString(markdown: md) {
-                textView.attributedText = NSAttributedString(att)
-            } else {
-                textView.text = md
+            let opts = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+
+            if let att = try? AttributedString(markdown: md, options: opts) {
+                let mutable = NSMutableAttributedString(att)
+
+                // Comfortable paragraph spacing + line height for readability
+                let full = NSRange(location: 0, length: mutable.length)
+                let para = NSMutableParagraphStyle()
+                para.lineHeightMultiple = 1.12
+                para.paragraphSpacing = 8
+                mutable.addAttribute(NSAttributedString.Key.paragraphStyle, value: para, range: full)
+
+                // Base font/color (Markdown will still bold/italic/links appropriately)
+                mutable.addAttribute(.foregroundColor, value: UIColor.label, range: full)
+                textView.attributedText = mutable
+                return
             }
-        } else {
-            textView.text = md
         }
+
+        // Fallback (shouldn’t be hit on iOS 15+, but safe)
+        textView.text = md
+        textView.font = .preferredFont(forTextStyle: .body)
     }
 }
+
+// Small helper (used in other files; harmless here if you already have it)
+private extension UIFont {
+    func with(weight: UIFont.Weight) -> UIFont {
+        let d = fontDescriptor.addingAttributes([.traits: [UIFontDescriptor.TraitKey.weight: weight]])
+        return UIFont(descriptor: d, size: pointSize)
+    }
+}
+
+
 

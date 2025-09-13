@@ -15,6 +15,7 @@ class LoginViewController: BaseAuthViewController {
     private let forgotPasswordButton = LinkButton(title: "Forgot password?")
     private let loginButton = PrimaryButton(title: "Log In")
     private let switchToSignupButton = LinkButton(title: "Don't have an account? Sign up")
+    private var isSubmitting = false
     
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -42,6 +43,18 @@ class LoginViewController: BaseAuthViewController {
         passwordField.textField.placeholder = "Password"
         forgotPasswordButton.setTitleColor(.secondaryLabel, for: .normal)
         switchToSignupButton.setTitleColor(.secondaryLabel, for: .normal)
+        
+        // Email: proper keyboard + autofill
+        emailField.textField.keyboardType = .emailAddress
+        emailField.textField.textContentType = .username   // improves Keychain autofill
+
+        // Password: correct content type for login
+        passwordField.textField.textContentType = .password
+
+        // Optional but nice: only enable return when there’s text
+        emailField.textField.enablesReturnKeyAutomatically = true
+        passwordField.textField.enablesReturnKeyAutomatically = true
+
         
         loginButton.titleLabel?.font = UIFont.preferredFont(forTextStyle: .headline)
         loginButton.titleLabel?.adjustsFontForContentSizeCategory = true
@@ -96,14 +109,21 @@ class LoginViewController: BaseAuthViewController {
     
     @objc private func loginTextFieldsDidChange(_ tf: UITextField) {
         let emailOK = emailField.textField.text?.isValidEmail() ?? false
-        let passOK  = !(passwordField.textField.text ?? "").isEmpty
+        let passOK  = (passwordField.textField.text ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines).count >= 3
         loginButton.isEnabled = emailOK && passOK
     }
     
     @objc private func handleLogin() {
+        guard !isSubmitting else { return }
+        isSubmitting = true
+        loginButton.isEnabled = false
+
         if !NetworkMonitor.shared.isConnected {
             presentAlert(title: "No Internet Connection",
                          message: "Please check your network and try again.")
+            isSubmitting = false
+            loginButton.isEnabled = true
             return
         }
         
@@ -115,6 +135,8 @@ class LoginViewController: BaseAuthViewController {
         guard !email.isEmpty, !password.isEmpty else {
             presentAlert(title: "Missing Fields",
                          message: "Please enter both email and password.")
+            isSubmitting = false
+            loginButton.isEnabled = true
             return
         }
         
@@ -122,38 +144,50 @@ class LoginViewController: BaseAuthViewController {
         if !email.isValidEmail() {
             presentAlert(title: "Invalid Email",
                          message: "Please check the format of your email address.")
+            isSubmitting = false
+            loginButton.isEnabled = true
             return
         }
+        guard password.count >= 3 else {
+            presentAlert(title: "Password Too Short",
+                         message: "Please enter at least 3 characters.")
+            isSubmitting = false
+            loginButton.isEnabled = true
+            return
+        }
+
         
         // 4) Proceed
         setLoading(true)
         AuthService.signIn(email: email, password: password) { [weak self] result in
             guard let self = self else { return }
-            self.setLoading(false)
-            
-            switch result {
-            case .success:
-                SharedDataManager.shared.reloadUserProfile { result in
-                      DispatchQueue.main.async {
-                        switch result {
-                        case .success(let profile):
-                          print("✅ Loaded profile for \(profile.name)")
-                        case .failure(let error):
-                          print("❌ Failed to load profile:", error)
+            onMain {
+                self.setLoading(false)
+                self.isSubmitting = false
+                switch result {
+                case .success:
+                    SharedDataManager.shared.reloadUserProfile { result in
+                        onMain {
+                            switch result {
+                            case .success(_):
+                                SceneDelegate.switchToMainApp()
+                            case .failure(let error):
+                                print("❌ Failed to load profile:", error)
+                                SceneDelegate.switchToMainApp()
+                            }
                         }
-                        // 2️⃣ Now that the profile is in memory, go to the main app
-                        SceneDelegate.switchToMainApp()
-                      }
                     }
-            case .failure(let error):
-                let msg: String
-                switch error {
-                case .userNotFound:  msg = "No account found for that email."
-                case .wrongPassword: msg = "That password looks incorrect."
-                case .networkError:  msg = "Please check your connection and try again."
-                default:             msg = "Login failed—please try again."
+                case .failure(let error):
+                    let msg: String
+                    switch error {
+                    case .userNotFound:  msg = "No account found for that email."
+                    case .wrongPassword: msg = "That password looks incorrect."
+                    case .networkError:  msg = "Please check your connection and try again."
+                    default:             msg = "Login failed—please try again."
+                    }
+                    self.presentAlert(title: "Login Failed", message: msg)
+                    self.loginButton.isEnabled = true
                 }
-                self.presentAlert(title: "Login Failed", message: msg)
             }
         }
     }

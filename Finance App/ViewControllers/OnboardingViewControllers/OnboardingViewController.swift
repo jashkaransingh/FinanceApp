@@ -7,6 +7,7 @@
 
 import UIKit
 
+
 final class OnboardingViewController: UIPageViewController {
     
     // MARK: - Properties
@@ -14,6 +15,7 @@ final class OnboardingViewController: UIPageViewController {
     private var pages = [UIViewController]()
     private let pageControl = UIPageControl()
     private let nextButton = InteractiveButton(type: .system)
+    private var isAdvancing = false
     
     // This is where we define the content for our 3 pages
     private let allPagesData: [OnboardingPage] = [
@@ -64,6 +66,33 @@ final class OnboardingViewController: UIPageViewController {
         // Configure the UI elements (dots and button)
         setupControls()
     }
+    func presentNotificationsDeniedUpsell() {
+        let alert = UIAlertController(
+            title: "Enable Alerts for Smarter Spending",
+            message: "Notifications help you avoid overspending and hit your goals. You can turn them on in Settings anytime.",
+            preferredStyle: .alert
+        )
+        let later = UIAlertAction(title: "Maybe Later", style: .cancel) { _ in
+            // mark onboarding done and leave now
+            UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+            SceneDelegate.switchToLogin()
+        }
+
+        let open = UIAlertAction(title: "Open Settings", style: .default) { _ in
+            // mark onboarding done, and ask SceneDelegate to switch after we return
+            UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+            UserDefaults.standard.set(true, forKey: "shouldSwitchToLoginAfterSettings")
+
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        }
+
+        alert.addAction(later)
+        alert.addAction(open)
+        present(alert, animated: true)
+    }
+
 }
 
 // MARK: - UIPageViewControllerDataSource
@@ -93,6 +122,8 @@ extension OnboardingViewController: UIPageViewControllerDelegate {
         }
         pageControl.currentPage = currentIndex
         updateButtonForPage(at: currentIndex)
+        isAdvancing = false
+        nextButton.isEnabled = true
     }
 }
 
@@ -110,8 +141,10 @@ private extension OnboardingViewController {
         // Configure Next Button
         nextButton.setTitle("Next", for: .normal)
         nextButton.titleLabel?.font = .systemFont(ofSize: 18, weight: .bold)
-        nextButton.backgroundColor = UIColor(red: 28/255, green: 28/255, blue: 30/255, alpha: 1.0)
+        nextButton.backgroundColor = .label
+        nextButton.tintColor = .systemBackground
         nextButton.setTitleColor(.systemBackground, for: .normal)
+        nextButton.setTitleColor(.tertiaryLabel, for: .disabled)
         nextButton.layer.cornerRadius = 12
         nextButton.addTarget(self, action: #selector(nextButtonTapped), for: .touchUpInside)
         
@@ -143,21 +176,34 @@ private extension OnboardingViewController {
     }
     
     @objc func nextButtonTapped() {
+        guard !isAdvancing else { return }
+        isAdvancing = true
+        nextButton.isEnabled = false
+        
         let currentIndex = pageControl.currentPage
         
         if currentIndex < pages.count - 1 {
             // Go to the next page
             let nextIndex = currentIndex + 1
-            setViewControllers([pages[nextIndex]], direction: .forward, animated: true, completion: nil)
+            setViewControllers([pages[nextIndex]], direction: .forward, animated: true) { [weak self] _ in
+                guard let self = self else { return }
+                self.isAdvancing = false
+                self.nextButton.isEnabled = true
+            }
             pageControl.currentPage = nextIndex
             updateButtonForPage(at: nextIndex)
         } else {
-            NotificationService.shared.requestAuthorization { [weak self] granted in
-                // This completion handler is called after the user taps "Allow" or "Don't Allow"
-                
-                UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-                DispatchQueue.main.async {
-                    SceneDelegate.switchToLogin()
+            NotificationService.shared.requestAuthorization { granted in
+                onMain {
+                    UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                    if granted {
+                        // schedule only if permitted
+                        NotificationService.shared.refreshDailySummaryNotification()
+                        SceneDelegate.switchToLogin()
+                    } else {
+                        // still on onboarding: offer Settings
+                        self.presentNotificationsDeniedUpsell()
+                    }
                 }
             }
         }

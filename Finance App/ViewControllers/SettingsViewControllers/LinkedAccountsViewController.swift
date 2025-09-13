@@ -10,50 +10,101 @@ import FirebaseAuth
 import FirebaseFirestore
 
 final class LinkedAccountsViewController: UIViewController {
-    
-    // MARK: – Properties
+
+    // MARK: - Background
+    private let gradientBackground = GradientBackgroundView()
+
+    // MARK: – State
     private var isAccountLinked: Bool = false
     
-    // MARK: - UI Components
+    // MARK: – Bank name
+    private var bankName: String? { didSet { applyBankName() } }
+
+    private let bankTitleLabel: UILabel = {
+        let l = UILabel()
+        l.font = .preferredFont(forTextStyle: .body)
+        l.adjustsFontForContentSizeCategory = true
+        return l
+    }()
+
+    // MARK: - UI
     private let activityIndicator = UIActivityIndicatorView(style: .large)
-    
-    private let tableView: UITableView = {
-        let tv = UITableView(frame: .zero, style: .insetGrouped)
-        tv.translatesAutoresizingMaskIntoConstraints = false
-        tv.register(UITableViewCell.self, forCellReuseIdentifier: "AccountCell")
-        return tv
-    }()
-    
+
     private let emptyStateView: EmptyStateView = {
-        let view = EmptyStateView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
+        let v = EmptyStateView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
     }()
+
+    // Card shown when an account is linked
+    private let connectedCard = GlassCardView(
+        appearance: UITraitCollection.current.userInterfaceStyle == .dark
+            ? .glass(dark: true, dimming: Design.Glass.cardDimming)
+            : .solid
+    )
+    private let statusPill = PaddingLabel(insets: .init(top: 3, left: 8, bottom: 3, right: 8))
+    private let replaceButton = UIButton(type: .system)
+    private let unlinkButton  = UIButton(type: .system)
     
-    // MARK: – Lifecycle
-    
+    private func applyBankName() {
+        let trimmed = bankName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let title = trimmed.isEmpty ? "Bank Account" : trimmed
+        bankTitleLabel.text = title
+        bankTitleLabel.accessibilityLabel = "Bank: \(title)"
+    }
+
+
+    // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Linked Accounts"
-        view.backgroundColor = .systemGroupedBackground
-        
-        setupTableView()
+        title = "Linked Accounts" // keep this for now; change to “Bank Connection” if you prefer
+        view.backgroundColor = Design.Surface.page
+
+        // Background gradient
+        view.addSubview(gradientBackground)
+        gradientBackground.alpha = Design.Alpha.gradientBackground
+        gradientBackground.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            gradientBackground.topAnchor.constraint(equalTo: view.topAnchor),
+            gradientBackground.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            gradientBackground.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            gradientBackground.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
+
+        setupConnectedCard()
         setupEmptyStateView()
         setupActivityIndicator()
-        
-        tableView.isHidden = true
+
+        // Initial visibility
+        connectedCard.isHidden = true
         emptyStateView.isHidden = true
         activityIndicator.hidesWhenStopped = true
-        emptyStateView.configure(message: "No bank account linked.", buttonTitle: "Link First Account")
+
+        // Empty state copy
+        emptyStateView.configure(
+            message: "Link a bank to import transactions automatically.",
+            buttonTitle: "Link a Bank"
+        )
+        emptyStateView.setAction(self, action: #selector(addOrReplaceAccount), for: .touchUpInside)
     }
-    
+
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         fetchLinkStatus()
     }
-    
-    // MARK: – UI Setup
-    
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        gradientBackground.resumeAnimation()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        gradientBackground.pauseAnimation()
+    }
+
+    // MARK: - UI Setup
+
     private func setupActivityIndicator() {
         view.addSubview(activityIndicator)
         activityIndicator.translatesAutoresizingMaskIntoConstraints = false
@@ -62,22 +113,9 @@ final class LinkedAccountsViewController: UIViewController {
             activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
-    
-    private func setupTableView() {
-        view.addSubview(tableView)
-        tableView.dataSource = self
-        tableView.delegate = self
-        NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            tableView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
-            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
-    }
-    
+
     private func setupEmptyStateView() {
         view.addSubview(emptyStateView)
-        emptyStateView.setAction(self, action: #selector(addOrReplaceAccount), for: .touchUpInside)
         NSLayoutConstraint.activate([
             emptyStateView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             emptyStateView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
@@ -85,75 +123,178 @@ final class LinkedAccountsViewController: UIViewController {
             emptyStateView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor)
         ])
     }
-    
+
+    private func setupConnectedCard() {
+        view.addSubview(connectedCard)
+        connectedCard.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            connectedCard.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: Design.Space.md),
+            connectedCard.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: Design.Space.md),
+            connectedCard.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -Design.Space.md)
+        ])
+
+        // Content container
+        let content = UIStackView()
+        content.axis = .vertical
+        content.spacing = Design.Space.sm
+        content.translatesAutoresizingMaskIntoConstraints = false
+        connectedCard.contentView.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.topAnchor.constraint(equalTo: connectedCard.contentView.topAnchor, constant: Design.Space.sm),
+            content.leadingAnchor.constraint(equalTo: connectedCard.contentView.leadingAnchor, constant: Design.Space.sm),
+            content.trailingAnchor.constraint(equalTo: connectedCard.contentView.trailingAnchor, constant: -Design.Space.sm),
+            content.bottomAnchor.constraint(equalTo: connectedCard.contentView.bottomAnchor, constant: -Design.Space.sm)
+        ])
+
+        // Top Row: icon • titles • spacer • pill
+        // Icon “chip”
+        let iconBox = UIView()
+        iconBox.backgroundColor = UIColor.systemIndigo.withAlphaComponent(0.12)
+        iconBox.layer.cornerRadius = Design.Radius.row
+        iconBox.layer.cornerCurve = Design.cornerCurve
+        iconBox.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            iconBox.widthAnchor.constraint(equalToConstant: 40),
+            iconBox.heightAnchor.constraint(equalToConstant: 40)
+        ])
+
+        let icon = UIImageView(image: UIImage(systemName: "building.columns.fill"))
+        icon.preferredSymbolConfiguration = .init(textStyle: .body, scale: .medium)
+        icon.tintColor = .systemIndigo
+        icon.contentMode = .center
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        iconBox.addSubview(icon)
+        NSLayoutConstraint.activate([
+            icon.centerXAnchor.constraint(equalTo: iconBox.centerXAnchor),
+            icon.centerYAnchor.constraint(equalTo: iconBox.centerYAnchor)
+        ])
+
+        // Labels
+        applyBankName()
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "Secured by Plaid"
+        subtitleLabel.font = .preferredFont(forTextStyle: .footnote)
+        subtitleLabel.textColor = .secondaryLabel
+
+        let labels = UIStackView(arrangedSubviews: [bankTitleLabel, subtitleLabel])
+        labels.axis = .vertical
+        labels.spacing = 2
+
+        // Status pill
+        statusPill.text = "Connected"
+        statusPill.font = .systemFont(ofSize: 12, weight: .semibold)
+        statusPill.textColor = .systemGreen
+        statusPill.backgroundColor = UIColor.systemGreen.withAlphaComponent(0.12)
+        statusPill.layer.cornerRadius = 10
+        statusPill.layer.masksToBounds = true
+        statusPill.setContentHuggingPriority(.required, for: .horizontal)
+        statusPill.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let spacer = UIView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let topRow = UIStackView(arrangedSubviews: [iconBox, labels, spacer, statusPill])
+        topRow.axis = .horizontal
+        topRow.alignment = .center
+        topRow.spacing = Design.Space.md
+        content.addArrangedSubview(topRow)
+
+        // Button row: Replace • Unlink (compact)
+        // Replace Bank — slightly larger, less rounded
+        var replaceCfg = UIButton.Configuration.filled()
+        replaceCfg.title = "Replace Bank"
+        replaceCfg.baseForegroundColor = .white
+        replaceCfg.baseBackgroundColor = .systemBlue
+
+        // Less curve than .capsule (use .medium if you want even squarer)
+        replaceCfg.cornerStyle = .large
+
+        // A bit bigger (height driven by top/bottom insets + font size)
+        replaceCfg.contentInsets = .init(top: 10, leading: 16, bottom: 10, trailing: 16)
+
+        var titleAttrs = AttributeContainer()
+        titleAttrs.font = .systemFont(ofSize: 16, weight: .semibold)   // bump from 15 → 16
+        replaceCfg.attributedTitle = AttributedString("Replace Bank", attributes: titleAttrs)
+
+        replaceButton.configuration = replaceCfg
+        replaceButton.addTarget(self, action: #selector(addOrReplaceAccount), for: .touchUpInside)
+
+        var unlinkCfg = UIButton.Configuration.plain()
+        unlinkCfg.title = "Unlink"
+        unlinkCfg.baseForegroundColor = .systemRed
+        unlinkButton.configuration = unlinkCfg
+        unlinkButton.addTarget(self, action: #selector(unlinkTapped), for: .touchUpInside)
+
+        // keep buttons close to each other
+        let buttons = UIStackView(arrangedSubviews: [replaceButton, unlinkButton])
+        buttons.axis = .horizontal
+        buttons.alignment = .center
+        buttons.spacing = Design.Space.md               // e.g. 12–16
+        content.addArrangedSubview(buttons)
+
+        connectedCard.isHidden = true
+    }
+
+    // MARK: - UI Toggle
     private func updateUI() {
         activityIndicator.stopAnimating()
-        tableView.isHidden = !isAccountLinked
+        connectedCard.isHidden = !isAccountLinked
         emptyStateView.isHidden = isAccountLinked
-        
-        if isAccountLinked {
-            tableView.reloadData()
-        }
     }
-    
+
     // MARK: – Data
-    
     private func fetchLinkStatus() {
         // Show loading spinner immediately
-        tableView.isHidden = true
+        connectedCard.isHidden = true
         emptyStateView.isHidden = true
         activityIndicator.startAnimating()
-        
+
         guard let uid = Auth.auth().currentUser?.uid else {
             self.isAccountLinked = false
+            self.bankName = nil            // ← keep title default when signed out
             self.updateUI()
             return
         }
-        
-        // Perform a quick, one-time fetch
+
         Firestore.firestore().collection("users").document(uid).getDocument { [weak self] doc, error in
             guard let self = self else { return }
             if let error = error {
-                // stop spinner & show error
                 self.activityIndicator.stopAnimating()
                 let alert = UIAlertController(title: "Error", message: error.localizedDescription, preferredStyle: .alert)
                 alert.addAction(.init(title: "OK", style: .default))
                 self.present(alert, animated: true)
                 return
             }
-            
+
             if let data = doc?.data(), doc!.exists {
                 self.isAccountLinked = data["isBankConnected"] as? Bool ?? false
+                self.bankName       = data["bankName"] as? String   // ← NEW: pull the bank name
             } else {
                 self.isAccountLinked = false
+                self.bankName = nil                                  // ← NEW: reset to default title
             }
+
             self.updateUI()
         }
     }
-    
+
     // MARK: – Actions
-    
+
     private func unlinkAccount() {
-        // 1️⃣ Flip the UI immediately so the “Link First Account” button appears
+        // Flip UI immediately
         isAccountLinked = false
         updateUI()
 
-        // 2️⃣ Call unlink without showing the spinner
+        // Fire actual unlink
         PlaidService.shared.unlinkAccount { [weak self] result in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                
                 switch result {
                 case .success:
                     NotificationCenter.default.post(name: .bankAccountUnlinked, object: nil)
-                    // UI is already in empty-state; no further work needed
-                    
                 case .failure(let error):
-                    let alert = UIAlertController(
-                        title: "Error",
-                        message: error.localizedDescription,
-                        preferredStyle: .alert
-                    )
+                    let alert = UIAlertController(title: "Error", message: error.localizedDescription, preferredStyle: .alert)
                     alert.addAction(.init(title: "OK", style: .default))
                     self.present(alert, animated: true)
                 }
@@ -161,55 +302,37 @@ final class LinkedAccountsViewController: UIViewController {
         }
     }
     
-    
+    @objc private func unlinkTapped() {
+        let alert = UIAlertController(
+            title: "Unlink Bank?",
+            message: "Transactions will stop syncing. You can link a bank again anytime.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Unlink", style: .destructive) { [weak self] _ in
+            self?.unlinkAccount()
+        })
+        present(alert, animated: true)
+    }
+
+
     @objc private func addOrReplaceAccount() {
         startPlaidLinkFlow()
     }
-    
-    private func startPlaidLinkFlow() {
-        PlaidService.shared.startPlaidLink(from: self,
-                                           onSuccess: { [weak self] _ in
-            guard let self = self else { return }
-            NotificationCenter.default.post(name: .bankAccountLinked, object: nil)
-            self.fetchLinkStatus()
-        },
-                                           onError: { [weak self] error in
-            guard let self = self else { return }
-            print("Plaid Link flow failed: \(error)")
-            // you might want to show an alert here too
-        })
-    }
-}
 
-// MARK: - UITableViewDataSource, UITableViewDelegate
-extension LinkedAccountsViewController: UITableViewDataSource, UITableViewDelegate {
-    
-    func numberOfSections(in tableView: UITableView) -> Int { 1 }
-    
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return 1
-    }
-    
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "AccountCell", for: indexPath)
-        cell.textLabel?.text = "Bank Account"
-        cell.accessoryType = .none
-        return cell
-    }
-    
-    func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
-        guard editingStyle == .delete else { return }
-        
-        let alert = UIAlertController(title: "Unlink Account?",
-                                      message: "Are you sure you want to remove this account? All related data will be deleted.",
-                                      preferredStyle: .alert)
-        
-        let removeAction = UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in
-            self?.unlinkAccount()
-        }
-        alert.addAction(removeAction)
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
-        present(alert, animated: true)
+    private func startPlaidLinkFlow() {
+        PlaidService.shared.startPlaidLink(
+            from: self,
+            onSuccess: { [weak self] _ in
+                guard let self = self else { return }
+                NotificationCenter.default.post(name: .bankAccountLinked, object: nil)
+                self.fetchLinkStatus()
+            },
+            onError: { [weak self] error in
+                guard let self = self else { return }
+                print("Plaid Link flow failed: \(error)")
+            }
+        )
     }
 }
 

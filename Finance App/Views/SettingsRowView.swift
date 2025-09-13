@@ -27,7 +27,7 @@ final class SettingsRowView: UIControl {
         label.setContentHuggingPriority(.defaultLow, for: .horizontal)
         return label
     }()
-
+    
     private let detailLabel: UILabel = {
         let label = UILabel()
         label.textColor = .secondaryLabel
@@ -38,7 +38,7 @@ final class SettingsRowView: UIControl {
         label.setContentHuggingPriority(.defaultLow, for: .horizontal)
         return label
     }()
-
+    
     
     private let iconContainerView: UIView = {
         let view = UIView()
@@ -87,6 +87,7 @@ final class SettingsRowView: UIControl {
     
     private var switchAction: ((Bool) -> Void)?
     private var centeredTitleConstraint: NSLayoutConstraint?
+    private var rowHeightConstraint: NSLayoutConstraint?
     
     
     override var isHighlighted: Bool {
@@ -145,8 +146,10 @@ final class SettingsRowView: UIControl {
         highlightOverlay.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stackView)
         
+        rowHeightConstraint = heightAnchor.constraint(equalToConstant: Design.Row.height)
+        rowHeightConstraint?.isActive = true
+        
         NSLayoutConstraint.activate([
-            self.heightAnchor.constraint(greaterThanOrEqualToConstant: 56),
             
             iconContainerView.widthAnchor.constraint(equalToConstant: 30),
             iconContainerView.heightAnchor.constraint(equalToConstant: 30),
