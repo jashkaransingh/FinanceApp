@@ -8,6 +8,7 @@
 import Foundation
 import FirebaseFirestore
 
+
 struct UserProfile: Codable {
     @DocumentID var id: String?
     

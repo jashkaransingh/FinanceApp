@@ -8,6 +8,7 @@
 import UIKit
 import LinkKit
 import LocalAuthentication
+import GoogleSignIn
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
@@ -90,11 +91,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             // 4) Make the window visible
             win.makeKeyAndVisible()
           }
-//    func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
-//        PlaidService.shared.linkHandler?.open(
-//          presentUsing: .viewController(UIApplication.shared.topMostViewController()!)
-//        )
-//    }
+    func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
+        guard let url = contexts.first?.url else { return }
+        // First let Google Sign-In try to handle it
+        if GIDSignIn.sharedInstance.handle(url) {
+            return
+        }
+    }
     
     static func switchToMainApp() {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,

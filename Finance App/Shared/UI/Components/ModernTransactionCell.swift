@@ -16,7 +16,7 @@ class ModernTransactionCell: UITableViewCell {
     
     private let containerView: UIView = {
         let v = UIView()
-        v.backgroundColor = .secondarySystemBackground
+        v.backgroundColor = .secondarySystemGroupedBackground
         v.layer.cornerRadius = 12
         v.layer.shadowColor = UIColor.black.cgColor
         v.layer.shadowOpacity = 0.05
@@ -62,6 +62,13 @@ class ModernTransactionCell: UITableViewCell {
         setupViews()
     }
     
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        nameLabel.text = nil
+        dateLabel.text = nil
+        amountLabel.text = nil
+    }
+    
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
@@ -101,29 +108,35 @@ class ModernTransactionCell: UITableViewCell {
             dateLabel.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -12),
             dateLabel.trailingAnchor.constraint(lessThanOrEqualTo: containerView.trailingAnchor, constant: -12)
         ])
+        // Prevent amount from getting squashed; let name truncate first
+        amountLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        
+        // Shadows: improve scrolling perf a bit
+        containerView.layer.shouldRasterize = true
+        containerView.layer.rasterizationScale = UIScreen.main.scale
     }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Give Core Animation a fixed shadow path for perf
+        containerView.layer.shadowPath = UIBezierPath(
+            roundedRect: containerView.bounds,
+            cornerRadius: containerView.layer.cornerRadius
+        ).cgPath
+    }
+    
     
     /// Call this to populate name, date, and amount
     func configure(with transaction: Transaction) {
         nameLabel.text = transaction.name
         
-        // Format date as “Jun 03, 2025” instead of “2025-06-03”
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd"
-        df.locale = Locale(identifier: "en_US_POSIX")
-        if let d = df.date(from: transaction.date) {
-            let out = DateFormatter()
-            out.dateFormat = "MMM dd, yyyy"
-            out.locale = Locale(identifier: "en_US_POSIX")
-            dateLabel.text = out.string(from: d)
+        if let d = AppFormatters.isoYMD.date(from: transaction.date) {
+            dateLabel.text = AppFormatters.prettyMDY.string(from: d)
         } else {
             dateLabel.text = transaction.date
         }
         
-        // Format amount as currency
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        amountLabel.text = formatter.string(from: NSNumber(value: transaction.amount))
+        amountLabel.text = AppFormatters.currency.string(from: transaction.amount as NSNumber)
     }
 }
 

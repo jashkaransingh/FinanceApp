@@ -10,10 +10,17 @@ import LinkKit
 import FirebaseAuth
 import FirebaseFirestore
 
+@MainActor
+final class AccountsViewController: UIViewController {
+    
+    private enum PlaceholderText {
+        static let connect = "Connect Your Bank"
+        static let syncing = "Syncing your accounts..."
+        static let signedOut = "Please sign in."
+        static let cannotConnect = "Could not connect."
+        static let genericError = "An error occurred."
+    }
 
-class AccountsViewController: UIViewController {
-    
-    
     
     // MARK: - UI Properties
     private let headerView = TitleHeaderView()// 'My Accounts' header at top
@@ -31,13 +38,19 @@ class AccountsViewController: UIViewController {
     }()
     
     private let aiBadgeIcon: UIImageView = {
-        let config = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
-        let iv = UIImageView(image: UIImage(systemName: "apple.intelligence", withConfiguration: config))
-        // Use dynamic label color
-        iv.tintColor = .label
-        iv.translatesAutoresizingMaskIntoConstraints = false
-        return iv
-    }()
+            let config = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
+            // Fallback for iOS < 18 (so lowering your deployment target won’t break)
+            let name: String
+            if #available(iOS 18.0, *) {
+                name = "apple.intelligence"
+            } else {
+                name = "sparkles" // simple, supported everywhere
+            }
+            let iv = UIImageView(image: UIImage(systemName: name, withConfiguration: config))
+            iv.tintColor = .label
+            iv.translatesAutoresizingMaskIntoConstraints = false
+            return iv
+        }()
     
     private let aiBadgeLabel: UILabel = {
         // Uppercase + letter spacing
@@ -75,6 +88,10 @@ class AccountsViewController: UIViewController {
                                                object: nil)
         
     }
+    
+    deinit {
+            NotificationCenter.default.removeObserver(self, name: .bankAccountUnlinked, object: nil)
+        }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -122,24 +139,21 @@ class AccountsViewController: UIViewController {
     
     private func configureScrollView() {// Configures and constrains the scrollView below the header
         view.addSubview(scrollView)
-        scrollView.alwaysBounceVertical = true
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
+                scrollView.alwaysBounceVertical = true
+                scrollView.translatesAutoresizingMaskIntoConstraints = false
         
-        // ← Preferred, since iOS 10:
-        if #available(iOS 10.0, *) {
-            scrollView.refreshControl = refreshControl
-        } else {
-            scrollView.addSubview(refreshControl)
-        }
-        refreshControl.addTarget(self, action: #selector(refreshData), for: .valueChanged)
-        
-        NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
-        ])
-    }
+        scrollView.keyboardDismissMode = .interactive
+
+                scrollView.refreshControl = refreshControl
+                refreshControl.addTarget(self, action: #selector(refreshData), for: .valueChanged)
+
+                NSLayoutConstraint.activate([
+                    scrollView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
+                    scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                    scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                    scrollView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+                ])
+            }
     
     
     private func configureStackView() {// Configures the vertical stackView inside the scrollView
@@ -164,47 +178,37 @@ class AccountsViewController: UIViewController {
     }
     
     private func configureFloatingButton() {
-        // 1️⃣ FAB
-        let fab = FloatingActionButton()
-        view.addSubview(fab)
-        fab.addTarget(self, action: #selector(didTapBudgetAssistant), for: .touchUpInside)
-        
-        // 2️⃣ Badge container + icon + label
-        view.addSubview(aiBadgeContainer)
-        aiBadgeContainer.addSubview(aiBadgeIcon)
-        aiBadgeContainer.addSubview(aiBadgeLabel)
-        
-        // 3️⃣ Layout
-        NSLayoutConstraint.activate([
-            // FAB position
-            fab.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-            fab.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
-            
-            // Badge to left of FAB
-            aiBadgeContainer.centerYAnchor.constraint(equalTo: fab.centerYAnchor),
-            aiBadgeContainer.trailingAnchor.constraint(equalTo: fab.leadingAnchor, constant: -12),
-            aiBadgeContainer.heightAnchor.constraint(equalToConstant: 28),
-            
-            // Icon inside badge
-            aiBadgeIcon.leadingAnchor.constraint(equalTo: aiBadgeContainer.leadingAnchor, constant: 8),
-            aiBadgeIcon.centerYAnchor.constraint(equalTo: aiBadgeContainer.centerYAnchor),
-            
-            // Label inside badge
-            aiBadgeLabel.leadingAnchor.constraint(equalTo: aiBadgeIcon.trailingAnchor, constant: 4),
-            aiBadgeLabel.trailingAnchor.constraint(equalTo: aiBadgeContainer.trailingAnchor, constant: -8),
-            aiBadgeLabel.centerYAnchor.constraint(equalTo: aiBadgeContainer.centerYAnchor)
-        ])
-        
-        // 4️⃣ Pulse animation (optional, keep if you like)
-        let pulse = CABasicAnimation(keyPath: "transform.scale")
-        pulse.duration       = 1.8
-        pulse.fromValue      = 1.0
-        pulse.toValue        = 1.03
-        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        pulse.autoreverses   = true
-        pulse.repeatCount    = .infinity
-        aiBadgeContainer.layer.add(pulse, forKey: "pulse")
-    }
+            let fab = FloatingActionButton()
+            fab.accessibilityLabel = "Open Budget Assistant"
+            view.addSubview(fab)
+            fab.addTarget(self, action: #selector(didTapBudgetAssistant), for: .touchUpInside)
+
+            view.addSubview(aiBadgeContainer)
+            aiBadgeContainer.addSubview(aiBadgeIcon)
+            aiBadgeContainer.addSubview(aiBadgeLabel)
+
+            NSLayoutConstraint.activate([
+                fab.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+                fab.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24),
+
+                aiBadgeContainer.centerYAnchor.constraint(equalTo: fab.centerYAnchor),
+                aiBadgeContainer.trailingAnchor.constraint(equalTo: fab.leadingAnchor, constant: -12),
+                aiBadgeContainer.heightAnchor.constraint(equalToConstant: 28),
+
+                aiBadgeIcon.leadingAnchor.constraint(equalTo: aiBadgeContainer.leadingAnchor, constant: 8),
+                aiBadgeIcon.centerYAnchor.constraint(equalTo: aiBadgeContainer.centerYAnchor),
+
+                aiBadgeLabel.leadingAnchor.constraint(equalTo: aiBadgeIcon.trailingAnchor, constant: 4),
+                aiBadgeLabel.trailingAnchor.constraint(equalTo: aiBadgeContainer.trailingAnchor, constant: -8),
+                aiBadgeLabel.centerYAnchor.constraint(equalTo: aiBadgeContainer.centerYAnchor)
+            ])
+
+            let pulse = CABasicAnimation(keyPath: "transform.scale")
+            pulse.duration = 1.8; pulse.fromValue = 1.0; pulse.toValue = 1.03
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            pulse.autoreverses = true; pulse.repeatCount = .infinity
+            aiBadgeContainer.layer.add(pulse, forKey: "pulse")
+        }
     
     
     
@@ -217,7 +221,8 @@ class AccountsViewController: UIViewController {
         for _ in 0..<3 {
             let skeleton = ShimmerView()
             skeleton.translatesAutoresizingMaskIntoConstraints = false
-            skeleton.heightAnchor.constraint(equalToConstant: 140).isActive = true
+            skeleton.heightAnchor.constraint(equalToConstant: 132).isActive = true
+            skeleton.startAnimating()
             stackView.addArrangedSubview(skeleton)
         }
     }
@@ -252,7 +257,6 @@ class AccountsViewController: UIViewController {
         }
     }
     @objc private func handleBankAccountUnlinked() {
-        listener?.remove()
         attachListener()
     }
     
@@ -261,8 +265,10 @@ class AccountsViewController: UIViewController {
     
     /// Attaches a real-time listener to the user document to get live summary updates.
     private func attachListener() {
+        listener?.remove()
+            listener = nil
         guard let uid = Auth.auth().currentUser?.uid else {
-            showPlaceholder(message: "Please sign in.")
+            showPlaceholder(message: PlaceholderText.signedOut)
             return
         }
         
@@ -277,12 +283,12 @@ class AccountsViewController: UIViewController {
             
             if let error = error {
                 print("Firestore listener error: \(error.localizedDescription)")
-                self.showPlaceholder(message: "Could not connect.")
+                self.showPlaceholder(message: PlaceholderText.cannotConnect)
                 return
             }
             
             guard let document = documentSnapshot, document.exists else {
-                self.showPlaceholder(message: "An error occurred.")
+                self.showPlaceholder(message: PlaceholderText.genericError)
                 return
             }
             
@@ -311,13 +317,13 @@ class AccountsViewController: UIViewController {
                     // Bank is linked, but summaries aren't ready yet.
                     // This happens on a new phone or during a slow sync.
                     // Show a specific message and trigger a sync.
-                    self.showPlaceholder(message: "Syncing your accounts...")
+                    self.showPlaceholder(message: PlaceholderText.syncing)
                     self.refreshData()
                 }
             } else {
                 // THE BANK IS NOT CONNECTED.
                 // Show the button to connect a bank.
-                self.showPlaceholder(message: "Connect Your Bank")
+                self.showPlaceholder(message: PlaceholderText.connect)
             }
         }
     }
@@ -373,7 +379,7 @@ class AccountsViewController: UIViewController {
             let card = AccountCardView()//create instance of custom card view
             card.configure(with: model)//passes data model to the card
             card.translatesAutoresizingMaskIntoConstraints = false
-            card.heightAnchor.constraint(equalToConstant: 140).isActive = true
+            card.heightAnchor.constraint(equalToConstant: 132).isActive = true
             //    Add tap gesture to the card
             card.addTarget(self, action: #selector(cardTapped(_:)), for: .touchUpInside)//add tap gesture
             

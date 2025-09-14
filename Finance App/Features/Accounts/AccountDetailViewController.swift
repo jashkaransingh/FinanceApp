@@ -9,8 +9,8 @@ import UIKit
 import FirebaseAuth
 import FirebaseFirestore
 
-class AccountDetailViewController: UIViewController {
-    // MARK: – Public API
+@MainActor
+final class AccountDetailViewController: UIViewController {
     var period: String?        // “today” / “week” / “month”
     
     // MARK: – Private Properties
@@ -52,31 +52,27 @@ class AccountDetailViewController: UIViewController {
         title = "\((period ?? "This").capitalized)'s Spending"
     }
     private func configureTableView() {
-        tableView.translatesAutoresizingMaskIntoConstraints = false
-        tableView.backgroundColor = .clear
-        tableView.separatorStyle = .none
-        tableView.contentInsetAdjustmentBehavior = .automatic
-        
-        tableView.dataSource = self
-        tableView.delegate   = self
-        
-        tableView.register(
-            ModernTransactionCell.self,
-            forCellReuseIdentifier: ModernTransactionCell.reuseID
-        )
-        tableView.register(
-            UITableViewCell.self,
-            forCellReuseIdentifier: "SkeletonCell"
-        )
-        
-        view.addSubview(tableView)
-        NSLayoutConstraint.activate([
-            tableView.topAnchor.constraint(equalTo: view.topAnchor),
-            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-        ])
-    }
+            tableView.translatesAutoresizingMaskIntoConstraints = false
+            tableView.backgroundColor = .clear
+            tableView.separatorStyle = .none
+            tableView.contentInsetAdjustmentBehavior = .automatic
+            tableView.estimatedRowHeight = 60
+
+            tableView.dataSource = self
+            tableView.delegate   = self
+
+            tableView.register(ModernTransactionCell.self,
+                               forCellReuseIdentifier: ModernTransactionCell.reuseID)
+            tableView.register(UITableViewCell.self, forCellReuseIdentifier: "SkeletonCell")
+
+            view.addSubview(tableView)
+            NSLayoutConstraint.activate([
+                tableView.topAnchor.constraint(equalTo: view.topAnchor),
+                tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            ])
+        }
     
     // MARK: – Data Loading
     

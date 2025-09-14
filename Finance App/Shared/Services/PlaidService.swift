@@ -154,9 +154,7 @@ final class PlaidService {
     }
 }
 extension Notification.Name {
-    static let bankAccountLinked = Notification.Name("bankAccountLinked")
-}
-extension Notification.Name {
+    static let bankAccountLinked   = Notification.Name("bankAccountLinked")
     static let bankAccountUnlinked = Notification.Name("bankAccountUnlinked")
 }
 

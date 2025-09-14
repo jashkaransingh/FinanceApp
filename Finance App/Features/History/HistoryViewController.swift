@@ -123,6 +123,8 @@ class HistoryViewController: UIViewController {
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+        tableView.sectionHeaderHeight = UITableView.automaticDimension
+        tableView.estimatedSectionHeaderHeight = 55
     }
     
     // MARK: – Data Fetch
@@ -339,6 +341,7 @@ extension HistoryViewController: UITableViewDataSource {
             cell.backgroundColor = .clear
             cell.textLabel?.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
             cell.detailTextLabel?.font = UIFont.systemFont(ofSize: 16, weight: .semibold)
+            cell.detailTextLabel?.textColor = .label
             cell.textLabel?.text = "Monthly Total"
             if let total = monthTotals[monthStart] {
                 let fmt = NumberFormatter()
@@ -404,7 +407,7 @@ extension HistoryViewController: UITableViewDelegate {
     }
     
     func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
-        return isLoading ? 0 : 50
+        return isLoading ? 0 : UITableView.automaticDimension
     }
     
     func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
