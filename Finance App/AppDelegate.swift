@@ -6,102 +6,112 @@
 //
 
 import UIKit
-import FirebaseCore
 import UserNotifications
-import LinkKit
-import GoogleSignIn
+import FirebaseCore
 import FirebaseAuth
+import GoogleSignIn
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    
+
+    // Centralize the UserDefaults keys used here
+    private enum DefaultsKey {
+        static let didRunInitialSecurityCleanup_v1 = "didRunInitialSecurityCleanup_v1"
+        static let hasCompletedOnboarding          = "hasCompletedOnboarding"
+    }
+
+    // MARK: - UIApplicationDelegate
+
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
+
         _ = NetworkMonitor.shared
+
         UINavigationBar.appearance().prefersLargeTitles = true
         FirebaseApp.configure()
-        
-        guard let firebaseApp = FirebaseApp.app(), let clientID = firebaseApp.options.clientID else {
-            fatalError("Could not configure Firebase/Google Sign-In: clientID is missing.")
+
+        if let app = FirebaseApp.app(), let clientID = app.options.clientID {
+            GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+        } else {
+            #if DEBUG
+            assertionFailure("Could not configure Firebase/Google Sign-In: clientID is missing.")
+            #endif
+            // In Release, we simply don’t enable Google sign-in.
         }
-        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
-        
-        // Register default settings for notifications.
+
         registerDefaultNotificationSettings()
-        
-        // Hook up UNUserNotificationCenter delegate.
         UNUserNotificationCenter.current().delegate = self
-        
+
         performFirstInstallSecurityCleanup()
-        
+
         return true
     }
-    
-    // MARK: - Default Settings
-    
-    /// Sets the default values for notification toggles to ON the first time the app is run.
+
+    // MARK: - Default Notification Settings
     private func registerDefaultNotificationSettings() {
         var defaults: [String: Any] = [:]
-        // We can now loop through our settings without creating dummy notifications!
         for setting in NotificationSetting.allCases {
             defaults[setting.key] = true
         }
         UserDefaults.standard.register(defaults: defaults)
     }
-    
+
+    // MARK: - First-Install Security Cleanup
+
     private func performFirstInstallSecurityCleanup() {
-        let flag = "didRunInitialSecurityCleanup_v1"
-
-        // Only once on a clean install (UserDefaults is empty on reinstall)
+        let flag = DefaultsKey.didRunInitialSecurityCleanup_v1
         if !UserDefaults.standard.bool(forKey: flag) {
-            // 1) Sign out of Firebase (clears Firebase tokens from keychain)
-            do { try Auth.auth().signOut() } catch { print("SignOut error:", error) }
+            do { try Auth.auth().signOut() } catch {
+                #if DEBUG
+                print("SignOut error:", error)
+                #endif
+            }
 
-            // 2) Sign out of Google if used (prevents silent restore)
+            // Sign out of Google to prevent silent restore
             GIDSignIn.sharedInstance.signOut()
 
-            // 3) (Optional) Clear any of your own keychain items
-            // If your KeychainHelper has a wipe/reset method, call it here.
-            // e.g., KeychainHelper.shared.resetAll()
+            // If you have a keychain wipe, call it here:
+            // KeychainHelper.shared.resetAll()
 
-            // 4) Ensure onboarding starts fresh (usually already false on clean install)
-            UserDefaults.standard.set(false, forKey: "hasCompletedOnboarding")
+            // Ensure onboarding starts fresh
+            UserDefaults.standard.set(false, forKey: DefaultsKey.hasCompletedOnboarding)
 
-            // 5) Mark done so we don't log people out after normal updates
+            // Mark done so we don't log people out after normal updates
             UserDefaults.standard.set(true, forKey: flag)
         }
     }
 
-    
-    // MARK: - Standard Delegate Methods
-    
+    // MARK: - URL Handling
+
     func application(_ app: UIApplication,
                      open url: URL,
                      options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
-        return GIDSignIn.sharedInstance.handle(url)
+        GIDSignIn.sharedInstance.handle(url)
     }
-    
-    func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler:
-        @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
+
+    // MARK: - UNUserNotificationCenterDelegate
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         // Show notifications even when the app is in the foreground.
         completionHandler([.banner, .sound, .badge])
     }
-    
+
     // MARK: - UISceneSession Lifecycle
-    
-    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
-        return UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+
+    func application(_ application: UIApplication,
+                     configurationForConnecting connectingSceneSession: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
     }
-    
+
     func application(_ application: UIApplication, didDiscardSceneSessions sceneSessions: Set<UISceneSession>) {
-        // Called when the user discards a scene session.
+        
     }
 }
+
 
 

@@ -7,10 +7,9 @@
 
 import Foundation
 
-/// Defines all backend endpoints.
+/// Backend endpoints and URL construction
 enum API {
     // This host should point to your Flask server's address.
-    // Make sure this is configured correctly in your Environment.
     static let host = Environment.baseURL
     
     case createLinkToken
@@ -21,7 +20,7 @@ enum API {
     case aiSummary
     case budget
     
-    /// Returns the full URL for the given endpoint.
+    /// Full URL for the endpoint
     var url: URL {
         let path: String
         switch self {

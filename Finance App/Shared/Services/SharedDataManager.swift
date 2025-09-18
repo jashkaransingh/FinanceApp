@@ -9,12 +9,14 @@ import Foundation
 import FirebaseFirestore
 import FirebaseAuth
 
-// A Codable struct to easily save/load the data your widget needs.
+// MARK: - Shared DTOs
+
 struct SharedBudgetData: Codable {
     let today: Double
     let yesterday: Double
     let weeklyBudget: Double
 }
+
 private struct CachedUserProfileHeader: Codable {
     let name: String
     let email: String
@@ -23,18 +25,23 @@ private struct CachedUserProfileHeader: Codable {
     let bankName: String?
 }
 
-// Manages reading and writing data to the shared App Group container.
+/// Manages reading/writing small bits of data to the App Group container
+/// and provides a simple on-device cache for the user's profile header.
 final class SharedDataManager {
+    
+    // Singleton
     static let shared = SharedDataManager()
     private init() {}
-    // The App Group ID you created in Step 1.
-    // !! IMPORTANT: Replace with your actual App Group ID !!
+    
+    // MARK: Keys & Paths
+    
+    /// Replace with your actual App Group ID
     private let appGroupID = "group.com.singh.financeapp"
-    private static let userProfileCacheKey = "userProfileCache"
     
-    var currentUserProfile: UserProfile?
+    private enum DefaultsKey {
+        static let userProfileCache = "userProfileCache"
+    }
     
-    // The specific file URL within the shared container.
     private var sharedFileURL: URL? {
         guard let groupContainer = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) else {
             print("Error: Could not get shared container URL.")
@@ -43,12 +50,16 @@ final class SharedDataManager {
         return groupContainer.appendingPathComponent("sharedBudgetData.json")
     }
     
+    // MARK: State
+    
+    var currentUserProfile: UserProfile?
+    
     // Saves the budget data to the shared JSON file.
     func save(_ data: SharedBudgetData) {
         guard let url = sharedFileURL else { return }
         do {
-            let encodedData = try JSONEncoder().encode(data)
-            try encodedData.write(to: url)
+            let encoded = try JSONEncoder().encode(data)
+            try encoded.write(to: url)
             print("Successfully saved data to shared container.")
         } catch {
             print("Error saving shared data: \(error.localizedDescription)")
@@ -62,18 +73,18 @@ final class SharedDataManager {
         }
         do {
             let data = try Data(contentsOf: url)
-            let decodedData = try JSONDecoder().decode(SharedBudgetData.self, from: data)
-            return decodedData
+            return try JSONDecoder().decode(SharedBudgetData.self, from: data)
         } catch {
             print("Error loading shared data: \(error.localizedDescription)")
             return nil
         }
     }
     
+    // MARK: Profile Header Cache (UserDefaults)
+    
     /// Saves the user profile to the local device cache (UserDefaults).
     /// - Parameter profile: The UserProfile object to save.
     func saveProfileToCache(_ profile: UserProfile) {
-        // Map Firestore Timestamp -> Date for caching
         let header = CachedUserProfileHeader(
             name: profile.name,
             email: profile.email,
@@ -82,24 +93,22 @@ final class SharedDataManager {
             bankName: profile.bankName
         )
         do {
-            // For this DTO, default JSONEncoder is fine (no custom date strategy needed)
             let data = try JSONEncoder().encode(header)
-            UserDefaults.standard.set(data, forKey: Self.userProfileCacheKey)
+            UserDefaults.standard.set(data, forKey: DefaultsKey.userProfileCache)
             print("Successfully saved profile header to cache.")
         } catch {
             print("Error saving profile header to cache: \(error.localizedDescription)")
         }
     }
-
+    
     /// Loads the user profile from the local device cache.
     /// - Returns: A UserProfile object if one is cached, otherwise nil.
     func loadProfileFromCache() -> UserProfile? {
-        guard let data = UserDefaults.standard.data(forKey: Self.userProfileCacheKey) else {
+        guard let data = UserDefaults.standard.data(forKey: DefaultsKey.userProfileCache) else {
             return nil
         }
         do {
             let header = try JSONDecoder().decode(CachedUserProfileHeader.self, from: data)
-            // Rehydrate a UserProfile just enough for UI (id/accountSummaries stay nil)
             return UserProfile(
                 id: nil,
                 name: header.name,
@@ -111,27 +120,35 @@ final class SharedDataManager {
             )
         } catch {
             print("Error loading profile header from cache: \(error.localizedDescription)")
-            UserDefaults.standard.removeObject(forKey: Self.userProfileCacheKey)
+            UserDefaults.standard.removeObject(forKey: DefaultsKey.userProfileCache)
             return nil
         }
     }
     
+    // MARK: Firestore Reload
+    
     func reloadUserProfile(completion: @escaping (Result<UserProfile, Error>) -> Void) {
         guard let uid = Auth.auth().currentUser?.uid else {
-            return completion(.failure(NSError(domain: "", code: -1)))
+            completion(.failure(NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "No signed-in user."])))
+            return
         }
+        
         Firestore.firestore()
             .collection("users")
             .document(uid)
             .getDocument { snapshot, error in
                 if let error = error {
-                    return completion(.failure(error))
+                    completion(.failure(error))
+                    return
                 }
                 do {
                     guard let profile = try snapshot?.data(as: UserProfile.self) else {
-                        // Create a custom error or use a generic one
-                        let error = NSError(domain: "AppError", code: 404, userInfo: [NSLocalizedDescriptionKey: "User profile not found or could not be decoded."])
-                        completion(.failure(error))
+                        let err = NSError(
+                            domain: "AppError",
+                            code: 404,
+                            userInfo: [NSLocalizedDescriptionKey: "User profile not found or could not be decoded."]
+                        )
+                        completion(.failure(err))
                         return
                     }
                     self.currentUserProfile = profile
@@ -143,6 +160,9 @@ final class SharedDataManager {
             }
     }
 }
+
+// MARK: - JSON Date Strategies (available if needed elsewhere)
+
 extension JSONEncoder.DateEncodingStrategy {
     static let iso8601withFractionalSeconds = custom { date, encoder in
         var container = encoder.singleValueContainer()
@@ -150,8 +170,7 @@ extension JSONEncoder.DateEncodingStrategy {
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSZZZZZ"
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        let dateString = formatter.string(from: date)
-        try container.encode(dateString)
+        try container.encode(formatter.string(from: date))
     }
 }
 

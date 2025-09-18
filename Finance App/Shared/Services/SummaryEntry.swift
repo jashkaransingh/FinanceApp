@@ -7,14 +7,15 @@
 
 import Foundation
 
+// MARK: - Model
+
 struct SummaryEntry: Codable, Identifiable {
     let id = UUID()
     let title: String
     let amount: Double
     let subtitle: String
 
-    // By excluding 'id' from the CodingKeys, you tell the JSONDecoder
-    // to ignore it, which removes the warning and makes your intent clear.
+    // Exclude 'id' from coding; only encode/decode data fields.
     private enum CodingKeys: String, CodingKey {
         case title, amount, subtitle
     }

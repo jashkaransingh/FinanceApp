@@ -12,7 +12,7 @@ import Foundation
 struct Transaction: Codable, Hashable {
     let name: String
     let amount: Double
-    let date: String // "yyyy-MM-dd"
+    let date: String // "yyyy-MM-dd" format
     let category: String
 }
 
@@ -47,35 +47,29 @@ struct ExchangeTokenRequest: Encodable {
     }
 }
 
+// MARK: - Direct Responses
 
 struct AISuggestionResponse: Decodable {
-    // This now correctly decodes the dynamic keys (e.g., "Food", "Transportation")
-    // into a dictionary where the value is a typed CategoryBudget struct.
+    /// Dynamic category keys (e.g., "Food", "Transportation") map to typed values.
     let suggestion: [String: CategoryBudget]
 }
 
-// MARK: - API Response Wrapper Models
-
-/// Used for endpoints that return a list of transactions.
 struct TransactionsResponse: Decodable {
     let transactions: [Transaction]
 }
 
-/// Used for the /summaries endpoint.
 struct SummariesResponse: Decodable {
     let summaries: [AccountSummary]
 }
 
-/// Used for the /create_link_token endpoint.
 struct LinkTokenResponse: Decodable {
     let link_token: String
 }
 
-
-/// A generic response for any endpoint that just returns {"success": true}.
 struct GenericSuccessResponse: Decodable {
     let success: Bool
 }
+
 struct LoadBudgetResponse: Decodable {
     let budgetPlan: [String: CategoryBudget]
     let totalBudget: Int

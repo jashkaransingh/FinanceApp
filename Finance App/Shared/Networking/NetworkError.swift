@@ -7,6 +7,7 @@
 
 import Foundation
 
+/// Error cases for all network operations.
 enum NetworkError: Error {
     case badURL
     case sessionExpired

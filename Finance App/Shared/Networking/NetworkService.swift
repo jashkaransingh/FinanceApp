@@ -8,11 +8,18 @@
 import Foundation
 import FirebaseAuth
 
+// MARK: - Types
+
 /// Generic helper for JSON-based POST and GET requests.
 enum HTTPMethod: String { case get = "GET", post = "POST" }
 
-struct NetworkService {
+// MARK: - Service
 
+/// Generic helpers for authenticated JSON GET/POST requests.
+/// All completions are delivered on the main queue.
+struct NetworkService {
+    
+    // MARK: Core executor
     private static func executeRequest<T: Decodable>(
         _ request: URLRequest,
         decodeTo type: T.Type,
@@ -23,7 +30,7 @@ struct NetworkService {
             DispatchQueue.main.async { completion(.failure(.sessionExpired)) }
             return
         }
-
+        
         // 2. Get a fresh, valid token. Firebase handles caching and refreshing behind the scenes.
         user.getIDTokenResult(forcingRefresh: false) { result, error in
             // 3. Handle token errors. This is where we detect an invalid session.
@@ -31,8 +38,8 @@ struct NetworkService {
                 // Check if the error code indicates an expired or invalid token.
                 let errorCode = (error as NSError).code
                 if errorCode == AuthErrorCode.userTokenExpired.rawValue ||
-                   errorCode == AuthErrorCode.invalidUserToken.rawValue ||
-                   errorCode == AuthErrorCode.userNotFound.rawValue {
+                    errorCode == AuthErrorCode.invalidUserToken.rawValue ||
+                    errorCode == AuthErrorCode.userNotFound.rawValue {
                     
                     DispatchQueue.main.async { completion(.failure(.sessionExpired)) }
                 } else {
@@ -60,7 +67,7 @@ struct NetworkService {
                     let message = "Server returned status \(httpResponse.statusCode)"
                     return DispatchQueue.main.async { completion(.failure(.serverError(message: message))) }
                 }
-
+                
                 guard let data = data else {
                     return DispatchQueue.main.async { completion(.failure(.serverError(message: "No data received"))) }
                 }
@@ -76,7 +83,9 @@ struct NetworkService {
             .resume()
         }
     }
-
+    
+    // MARK: Public API
+    
     /// Executes an authenticated JSON POST request.
     static func postJSON<T: Decodable, B: Encodable>(
         to url: URL,
@@ -91,7 +100,7 @@ struct NetworkService {
         
         executeRequest(request, decodeTo: type, completion: completion)
     }
-
+    
     /// Executes an authenticated GET request with optional query items.
     static func getJSON<T: Decodable>(
         from url: URL,

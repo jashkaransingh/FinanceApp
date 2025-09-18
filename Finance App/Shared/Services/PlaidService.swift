@@ -19,6 +19,8 @@ final class PlaidService {
     /// Keeps LinkKit handler alive between calls
     var linkHandler: LinkKit.Handler?
     
+    // MARK: - Public API
+    
     func startPlaidLink(
         from viewController: UIViewController,
         onSuccess: @escaping (LinkSuccess) -> Void,
@@ -30,68 +32,71 @@ final class PlaidService {
             decodeTo: LinkTokenResponse.self
         ) { result in
             switch result {
-                
-                // ───────────────────────
             case .failure(let err):
-                // Propagate network errors
-                onError(err)
+                // Forward upstream (UI layer may present the error)
+                dispatchToMain { onError(err) }
                 
-                // ───────────────────────
             case .success(let response):
                 // Present Plaid Link UI now that we have a link_token
                 self.presentLinkUI(
                     token: response.link_token,
                     from: viewController,
-                    
-                    // This onSuccess gives us the full LinkSuccess object:
-                    onSuccess: { (linkSuccess: LinkSuccess) in
-                        // ① Extract the institution and get the clean name
+                    onSuccess: { linkSuccess in
+                        // 1 Extract institution & compute display name
                         let institution = linkSuccess.metadata.institution
-                        print("CRITICAL DEBUG: The REAL institution ID is '\(institution.id)' and the name is '\(institution.name)'")
-
-                            let bankNameToSave = BankDisplayNameManager.shared.displayName(for: institution)
-                            print("DEBUG: Saving this name to Firestore: '\(bankNameToSave)'")
-
-                        // ② Save connected + name to Firestore
+                        
+#if DEBUG
+                        print("Plaid institution id=\(institution.id) name=\(institution.name)")
+#endif
+                        
+                        let bankNameToSave = BankDisplayNameManager.shared.displayName(for: institution)
+                        
+                        // 2 Save connected flag + bank name to Firestore
                         guard let uid = Auth.auth().currentUser?.uid else {
-                            // If there's no user, we can't save. Just call success.
-                            onSuccess(linkSuccess)
+                            // No signed-in user; still report success for the Link flow
+                            dispatchToMain { onSuccess(linkSuccess) }
                             return
                         }
-
-                        let docRef = Firestore.firestore().collection("users").document(uid)
                         
+                        let docRef = Firestore.firestore().collection("users").document(uid)
                         docRef.setData([
                             "isBankConnected": true,
                             "bankName": bankNameToSave
                         ], merge: true) { error in
-                            // --- THIS IS THE FIX ---
-                            // This completion block is only called AFTER Firestore confirms the write.
-                            // We now call our original onSuccess handler from here.
-                            
+#if DEBUG
                             if let error = error {
                                 print("Firestore error saving bank name: \(error.localizedDescription)")
-                                // Optionally, you could call your original onError handler here
-                                // onError(.unknown(error))
                             } else {
-                                print("Firestore successfully saved bank name: '\(bankNameToSave)'")
+                                print("Firestore saved bank name: '\(bankNameToSave)'")
                             }
+#endif
                             
-                            // ③ Notify your caller that the ENTIRE process is finished.
-                            // This now happens AFTER the database write is complete.
-                            onSuccess(linkSuccess)
+                            // 3 Notify caller after Firestore write completes
+                            dispatchToMain { onSuccess(linkSuccess) }
                         }
                     },
-                    
-                    onError: onError
+                    onError: { err in
+                        dispatchToMain { onError(err) }
+                    }
                 )
             }
         }
     }
     
+    /// Tells the backend to securely unlink the user's account.
+    func unlinkAccount(completion: @escaping (Result<Bool, NetworkError>) -> Void) {
+        NetworkService.postJSON(
+            to: API.removeItem.url,
+            body: EmptyBody(),
+            decodeTo: GenericSuccessResponse.self
+        ) { result in
+            completion(result.map { $0.success })
+        }
+    }
     
+    // MARK: - Private
     
-    /// Presents the Plaid Link UI with the given token
+    /// Presents the Plaid Link UI with the given token.
     private func presentLinkUI(
         token: String,
         from viewController: UIViewController,
@@ -102,37 +107,31 @@ final class PlaidService {
             self.exchangePublicTokenOnBackend(linkSuccess.publicToken) { result in
                 switch result {
                 case .success:
-                    onSuccess(linkSuccess) // <-- Call it on success!
+                    dispatchToMain { onSuccess(linkSuccess) }
                 case .failure(let err):
-                    onError(err)
+                    dispatchToMain { onError(err) }
                 }
             }
         }
         
         config.onExit = { exit in
             if let e = exit.error {
-                onError(.unknown(e))
+                dispatchToMain { onError(.unknown(e)) }
             }
+            // Release the handler once Link UI is dismissed
+            self.linkHandler = nil
         }
         
         switch Plaid.create(config) {
         case .failure(let err):
-            onError(.unknown(err))
+            dispatchToMain { onError(.unknown(err)) }
+            
         case .success(let handler):
             self.linkHandler = handler
-            handler.open(presentUsing: .viewController(viewController))
-        }
-    }
-    
-    /// Tells the backend to securely unlink the user's account.
-    func unlinkAccount(completion: @escaping (Result<Bool, NetworkError>) -> Void) {
-        // FIX: Use the EmptyBody struct here as well.
-        NetworkService.postJSON(
-            to: API.removeItem.url,
-            body: EmptyBody(),
-            decodeTo: GenericSuccessResponse.self
-        ) { result in
-            completion(result.map { $0.success })
+            // Present UI on main to avoid UIKit warnings
+            dispatchToMain {
+                handler.open(presentUsing: .viewController(viewController))
+            }
         }
     }
     
@@ -141,7 +140,6 @@ final class PlaidService {
         _ publicToken: String,
         completion: @escaping (Result<Bool, NetworkError>) -> Void
     ) {
-        // FIX: Use the new, type-safe ExchangeTokenRequest struct.
         let requestBody = ExchangeTokenRequest(publicToken: publicToken)
         
         NetworkService.postJSON(
@@ -153,9 +151,19 @@ final class PlaidService {
         }
     }
 }
+
+// MARK: - App Notifications
+
 extension Notification.Name {
     static let bankAccountLinked   = Notification.Name("bankAccountLinked")
     static let bankAccountUnlinked = Notification.Name("bankAccountUnlinked")
+}
+
+// MARK: - Small util
+
+/// Ensure UI callbacks run on the main queue.
+private func dispatchToMain(_ work: @escaping () -> Void) {
+    if Thread.isMainThread { work() } else { DispatchQueue.main.async { work() } }
 }
 
 

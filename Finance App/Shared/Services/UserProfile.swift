@@ -16,7 +16,7 @@ struct UserProfile: Codable {
     let email: String
     let createdAt: Timestamp
     
-    // Add these properties from your UserData struct
+    // Optional account state
     let isBankConnected: Bool?
     var bankName: String? 
     let accountSummaries: [AccountSummary]?

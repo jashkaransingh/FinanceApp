@@ -10,9 +10,12 @@ import FirebaseAuth
 import FirebaseFirestore
 import AuthenticationServices
 
-class AuthService {
+/// Central sign-in/sign-up/reset helpers backed by Firebase Auth + Firestore.
+final class AuthService {
     
-    public enum AuthError: Error {
+    // MARK: - Types
+    
+    enum AuthError: Error {
         case userNotFound         // login: no account with that email
         case wrongPassword        // login: password was incorrect
         case emailAlreadyInUse    // signup: account already exists
@@ -23,12 +26,13 @@ class AuthService {
         case unknown(String)      // catch‑all for other error messages
     }
     
+    // MARK: - Email/Password
+    
     static func signIn(email: String,
                        password: String,
                        completion: @escaping (Result<Void, AuthError>) -> Void) {
-        // Note the fully‑qualified FirebaseAuth.Auth.auth()
         FirebaseAuth.Auth.auth().signIn(withEmail: email, password: password) { authResult, error in
-            // If Firebase gave us back an error, map it to AuthError
+            // If Firebase gave back an error, map it to AuthError
             if let nsError = error as NSError? {
                 let authErr: AuthError
                 switch nsError.code {
@@ -53,8 +57,8 @@ class AuthService {
                          password: String,
                          name: String,
                          completion: @escaping (Result<Void, AuthError>) -> Void) {
-
-        FirebaseAuth.Auth.auth().createUser(withEmail: email, password: password) { result, error in
+        
+        Auth.auth().createUser(withEmail: email, password: password) { result, error in
             // Map Firebase error → AuthError
             if let nsError = error as NSError? {
                 let authErr: AuthError
@@ -67,30 +71,27 @@ class AuthService {
                 completion(.failure(authErr))
                 return
             }
-
-            // Created OK
+            
             guard let user = result?.user else {
                 completion(.failure(.unknown("Could not retrieve created user")))
                 return
             }
-
-            // 1) Put the name on the FirebaseAuth user (and refresh the cache)
+            
+            // 1) Set display name on the Auth user
             updateAuthDisplayName(user, to: name) { nameErr in
                 if let nameErr = nameErr {
-                    // keep strong consistency: remove the auth user on failure
                     user.delete { _ in completion(.failure(.profileSaveFailed(nameErr))) }
                     return
                 }
-
-                // 2) Save to Firestore (your existing profile doc)
+                
+                // 2) Save profile document in Firestore
                 saveUserProfile(user: user, name: name, email: email) { saveResult in
                     switch saveResult {
                     case .failure(let saveError):
                         user.delete { _ in completion(.failure(saveError)) }
-
+                        
                     case .success:
-                        // 3) Fire a verification email. We DO NOT fail the flow if this send errs.
-                        //    We’ll let the verify screen handle resend.
+                        // 3) Fire a verification email (non-fatal if this send fails)
                         sendVerificationEmail { _ in
                             completion(.success(()))
                         }
@@ -99,14 +100,14 @@ class AuthService {
             }
         }
     }
-
-    /// Sends a verify-email to the *current* user.
+    
+    /// Sends a verify-email to the user.
     static func sendVerificationEmail(completion: @escaping (Result<Void, AuthError>) -> Void) {
         guard let user = Auth.auth().currentUser else {
             completion(.failure(.unknown("No signed-in user")))
             return
         }
-
+        
         // You can pass ActionCodeSettings to bring users back to your app later.
         // Keeping it simple: let Firebase use the default template & URL.
         user.sendEmailVerification { error in
@@ -154,8 +155,8 @@ class AuthService {
         case AuthErrorCode.tooManyRequests.rawValue:
             return .unknown("Too many attempts. Try later.")
         case AuthErrorCode.invalidEmail.rawValue,
-             AuthErrorCode.userNotFound.rawValue,
-             AuthErrorCode.invalidRecipientEmail.rawValue:
+            AuthErrorCode.userNotFound.rawValue,
+            AuthErrorCode.invalidRecipientEmail.rawValue:
             // We’ll still show a generic “Email sent” in the UI to avoid enumeration,
             // but mapping to a concrete case can help with logging/metrics.
             return .userNotFound
@@ -163,9 +164,9 @@ class AuthService {
             return .unknown(nsError.localizedDescription)
         }
     }
-
     
-    // MARK: - New Social Sign-In Methods
+    
+    // MARK: - Social Sign-In
     
     /// Signs the user into Firebase using an Apple ID credential.
     static func signInWithApple(
@@ -215,7 +216,7 @@ class AuthService {
             if result.additionalUserInfo?.isNewUser == true {
                 let name = credential.fullName?.formatted() ?? "User"
                 let email = credential.email ?? result.user.email ?? ""
-
+                
                 updateAuthDisplayName(result.user, to: name) { _ in
                     saveUserProfile(user: result.user, name: name, email: email) { saveResult in
                         completion(saveResult)
@@ -258,7 +259,7 @@ class AuthService {
             if result.additionalUserInfo?.isNewUser == true {
                 let name = result.user.displayName ?? "User"
                 let email = result.user.email ?? ""
-
+                
                 updateAuthDisplayName(result.user, to: name) { _ in
                     saveUserProfile(user: result.user, name: name, email: email) { saveResult in
                         completion(saveResult)
@@ -267,7 +268,7 @@ class AuthService {
             } else {
                 completion(.success(()))
             }
-
+            
         }
     }
     
