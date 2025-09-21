@@ -120,15 +120,8 @@ extension NotificationsSettingsViewController: ToggleCellDelegate, TimePickerCel
         }
         
         if case .dailySummary = type {
-            tableView.performBatchUpdates {
-                self.buildSections()
-                let timePickerIndexPath = IndexPath(row: 1, section: 0)
-                if isOn {
-                    tableView.insertRows(at: [timePickerIndexPath], with: .fade)
-                } else {
-                    tableView.deleteRows(at: [timePickerIndexPath], with: .fade)
-                }
-            }
+            self.buildSections()
+            tableView.reloadSections(IndexSet(integer: 0), with: .automatic)
         }
     }
     

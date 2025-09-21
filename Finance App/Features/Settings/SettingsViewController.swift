@@ -8,6 +8,7 @@
 import UIKit
 import LocalAuthentication
 import FirebaseAuth
+import os
 
 // MARK: - Main View Controller
 class SettingsViewController: UIViewController {
@@ -22,6 +23,7 @@ class SettingsViewController: UIViewController {
         stackView.spacing = 24
         return stackView
     }()
+    private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "app", category: "Settings")
     // This property will hold a reference to the profile card after it's created.
     private var profileCard: GlassCardView? {
         didSet {
@@ -204,7 +206,7 @@ class SettingsViewController: UIViewController {
             self.profileHeaderView.configure(with: profile)
         }
         viewModel.onFetchError = { [weak self] error in
-            print("Failed to fetch profile: \(error.localizedDescription)")
+            self?.log.error("Profile fetch failed: \(error.localizedDescription, privacy: .public)")
             self?.profileCard?.isHidden = true
         }
     }
@@ -241,10 +243,6 @@ class SettingsViewController: UIViewController {
         navigationController?.pushViewController(vc, animated: true)
     }
     
-    @objc private func changePasswordTapped() {
-        let vc = ResetPasswordViewController()
-        navigationController?.pushViewController(vc, animated: true)
-    }
     
     @objc private func bankConnectionsTapped() {
         let vc = LinkedAccountsViewController()
@@ -262,9 +260,9 @@ class SettingsViewController: UIViewController {
     }
     
     @objc private func appLockRowTapped() {
-        let next = !appLockRow.accessorySwitch.isOn
-        // Flip the UI and fire the .valueChanged so your closure runs
-        appLockRow.setSwitch(isOn: next, animated: true, sendEvent: true)
+        // Derive the desired next state from persisted truth, not from the switch UI.
+        let wantsToEnable = !UserDefaults.standard.bool(forKey: SettingsKeys.isAppLockEnabled)
+        handleAppLockToggled(wantsToEnable: wantsToEnable)
     }
     @objc private func versionTapped() {
         VersionInfoViewController.presentCompact(from: self)
@@ -274,7 +272,6 @@ class SettingsViewController: UIViewController {
     
     private func configureLayout() {
         view.addSubview(gradientBackground)
-        gradientBackground.alpha = 0.08
         gradientBackground.alpha = Design.Alpha.gradientBackground
         gradientBackground.translatesAutoresizingMaskIntoConstraints = false
         
@@ -306,23 +303,49 @@ class SettingsViewController: UIViewController {
         ])
     }
     
+    private func setAppLockInteraction(enabled: Bool) {
+        appLockRow.isUserInteractionEnabled = enabled
+        appLockRow.accessorySwitch.isEnabled = enabled
+    }
+
     private func handleAppLockToggled(wantsToEnable: Bool) {
+        setAppLockInteraction(enabled: false)
+        let key = SettingsKeys.isAppLockEnabled
+
         if wantsToEnable {
             let context = LAContext()
             var error: NSError?
+
             guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-                presentAlert(title: "App Lock Unavailable", message: error?.localizedDescription ?? "Please set up Face ID, Touch ID, or a passcode.")
+                presentAlert(title: "App Lock Unavailable",
+                             message: error?.localizedDescription ?? "Please set up Face ID, Touch ID, or a passcode.")
+                // Ensure truth + UI are OFF
+                UserDefaults.standard.set(false, forKey: key)
+                appLockRow.setSwitch(isOn: false, animated: true, sendEvent: false)
+                setAppLockInteraction(enabled: true)
                 return
             }
-            context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Authenticate to enable App Lock") { [weak self] success, _ in
+
+            context.evaluatePolicy(.deviceOwnerAuthentication,
+                                   localizedReason: "Authenticate to enable App Lock") { [weak self] success, _ in
                 DispatchQueue.main.async {
-                    UserDefaults.standard.set(success, forKey: SettingsKeys.isAppLockEnabled)
-                    self?.appLockRow.setSwitch(isOn: success, animated: true)
+                    guard let self = self else { return }
+                    if success {
+                        UserDefaults.standard.set(true, forKey: key)
+                        self.appLockRow.setSwitch(isOn: true, animated: true, sendEvent: false)
+                    } else {
+                        // Revert if user cancels / fails auth
+                        UserDefaults.standard.set(false, forKey: key)
+                        self.appLockRow.setSwitch(isOn: false, animated: true, sendEvent: false)
+                    }
+                    self.setAppLockInteraction(enabled: true)
                 }
             }
         } else {
-            UserDefaults.standard.set(false, forKey: SettingsKeys.isAppLockEnabled)
-            self.appLockRow.setSwitch(isOn: false, animated: true)
+            // Turning OFF requires no authentication
+            UserDefaults.standard.set(false, forKey: key)
+            appLockRow.setSwitch(isOn: false, animated: true, sendEvent: false)
+            setAppLockInteraction(enabled: true)
         }
     }
     

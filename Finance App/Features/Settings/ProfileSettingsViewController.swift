@@ -15,7 +15,7 @@ final class ProfileSettingsViewController: UITableViewController {
     private let gradientBackground = GradientBackgroundView()
     private let headerCard = GlassCardView(
         appearance: UITraitCollection.current.userInterfaceStyle == .dark
-           ? .glass(dark: true, dimming: Design.Glass.cardDimming)
+        ? .glass(dark: true, dimming: Design.Glass.cardDimming)
         : .solid
     )
     
@@ -81,8 +81,8 @@ final class ProfileSettingsViewController: UITableViewController {
         super.viewWillAppear(animated)
         navigationItem.largeTitleDisplayMode = .always
     }
-
-
+    
+    
     
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
@@ -99,12 +99,12 @@ final class ProfileSettingsViewController: UITableViewController {
         tableView.relayoutTableHeaderIfNeeded(noAnimation: true)
         relayoutDeleteFooterToBottom(noAnimation: true)
     }
-
+    
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
         didLayoutOnce = false
     }
-
+    
     
     // MARK: - Header (mount once)
     private func mountHeaderIfNeeded() {
@@ -136,7 +136,7 @@ final class ProfileSettingsViewController: UITableViewController {
                             height: UIView.layoutFittingCompressedSize.height)
         container.frame.size.width = target.width
         container.frame.size.height = container.systemLayoutSizeFitting(target).height
-
+        
         
         tableView.tableHeaderView = container
         headerContainer = container
@@ -145,13 +145,13 @@ final class ProfileSettingsViewController: UITableViewController {
         formView.onChangePassword = { [weak self] in
             guard let self = self else { return }
             let vc = ResetPasswordViewController()
-
+            
             // Pre-fill email if we have it
             let emailFromForm = self.formView.email
             vc.prefillEmail = emailFromForm.isEmpty
-                ? Auth.auth().currentUser?.email
-                : emailFromForm
-
+            ? Auth.auth().currentUser?.email
+            : emailFromForm
+            
             self.navigationController?.pushViewController(vc, animated: true)
         }
     }
@@ -163,13 +163,13 @@ final class ProfileSettingsViewController: UITableViewController {
         initialVerified = verified
         formView.configure(name: name, email: email, isEmailVerified: verified)
         if !isEditingProfile { formView.setEditing(false) }
-
+        
         // Keep header/footers in sync if content height changed
         tableView.relayoutTableHeaderIfNeeded(noAnimation: true)
         relayoutDeleteFooterToBottom(noAnimation: true)
     }
-
-
+    
+    
     
     private func buildHeader() {
         guard let user = Auth.auth().currentUser else { return }
@@ -228,7 +228,7 @@ final class ProfileSettingsViewController: UITableViewController {
         button.layer.borderWidth = 0
         button.layer.masksToBounds = true
         button.layer.borderColor = Design.Hairline.color.cgColor
-
+        
         button.addTarget(self, action: #selector(deleteAccountTapped), for: .touchUpInside)
         
         let spacer = UIView()
@@ -247,7 +247,7 @@ final class ProfileSettingsViewController: UITableViewController {
             vstack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -Design.Space.md),
             vstack.topAnchor.constraint(equalTo: container.topAnchor, constant: Design.Space.sm),          // 12 (keeps a little air)
             vstack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -Design.Space.md),
-
+            
         ])
         
         container.frame.size.height = 96
@@ -306,41 +306,41 @@ final class ProfileSettingsViewController: UITableViewController {
             }
             
             // Keep Firestore in sync
-            Firestore.firestore().collection("users").document(user.uid)
-                .updateData(["name": newName]) { err in
-                    if let err = err {
-                        self.presentAlert(title: "Couldn’t save", message: err.localizedDescription)
-                        self.saveItem.isEnabled = true
-                        return
-                    }
-                    self.cacheName(newName)
-                    user.reload { _ in
-                        DispatchQueue.main.async {
-                            self.initialName = newName
-                            self.toast("Saved")
-                            self.isEditingProfile = false
-                            self.formView.setEditing(false)
-                            self.navigationItem.leftBarButtonItem = nil
-                            self.navigationItem.rightBarButtonItem = self.editItem
-                            self.updateSaveEnabled()
-                            self.buildHeader()
-                        }
+            let userDoc = Firestore.firestore().collection("users").document(user.uid)
+            userDoc.setData(["name": newName], merge: true) { err in
+                if let err = err {
+                    self.presentAlert(title: "Couldn’t save", message: err.localizedDescription)
+                    self.saveItem.isEnabled = true
+                    return
+                }
+                self.cacheName(newName)
+                user.reload { _ in
+                    DispatchQueue.main.async {
+                        self.initialName = newName
+                        self.toast("Saved")
+                        self.isEditingProfile = false
+                        self.formView.setEditing(false)
+                        self.navigationItem.leftBarButtonItem = nil
+                        self.navigationItem.rightBarButtonItem = self.editItem
+                        self.updateSaveEnabled()
+                        self.buildHeader()
                     }
                 }
+            }
         }
     }
     
     private func relayoutDeleteFooterToBottom(noAnimation: Bool = false) {
         guard let footer = deleteFooterContainer else { return }
-
+        
         let visibleHeight = tableView.bounds.height
-            - tableView.adjustedContentInset.top
-            - tableView.adjustedContentInset.bottom
+        - tableView.adjustedContentInset.top
+        - tableView.adjustedContentInset.bottom
         let headerHeight = tableView.tableHeaderView?.frame.height ?? 0
         let needed = max(96, visibleHeight - headerHeight)
-
+        
         guard abs(footer.frame.height - needed) > 0.5 else { return }
-
+        
         let apply = { [weak self] in
             guard let self = self else { return }
             footer.frame.size.height = needed
@@ -349,7 +349,7 @@ final class ProfileSettingsViewController: UITableViewController {
         }
         noAnimation ? UIView.performWithoutAnimation(apply) : apply()
     }
-
+    
     
     // MARK: - Minimal table (header only)
     override func numberOfSections(in tableView: UITableView) -> Int { 0 }
@@ -408,17 +408,17 @@ final class PaddingLabel: UILabel {
 private extension UITableView {
     func relayoutTableHeaderIfNeeded(noAnimation: Bool = false) {
         guard let header = tableHeaderView else { return }
-
+        
         header.setNeedsLayout()
         header.layoutIfNeeded()
-
+        
         let size = header.systemLayoutSizeFitting(
             CGSize(width: bounds.width,
                    height: UIView.layoutFittingCompressedSize.height)
         )
-
+        
         guard header.frame.height != size.height else { return }
-
+        
         let apply = { [weak self] in
             guard let self = self else { return }
             header.frame.size.height = size.height
@@ -428,8 +428,4 @@ private extension UITableView {
         noAnimation ? UIView.performWithoutAnimation(apply) : apply()
     }
 }
-
-
-
-
 

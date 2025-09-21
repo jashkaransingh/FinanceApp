@@ -9,6 +9,7 @@ import Foundation
 
 enum SettingsKeys {
     static let isAppLockEnabled = "isAppLockEnabled"
+    static let appAppearance    = "appAppearance"
 }
 
 enum SettingsStore {

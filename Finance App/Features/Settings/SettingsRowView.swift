@@ -83,10 +83,20 @@ final class SettingsRowView: UIControl {
         return v
     }()
     
+    private let hStack: UIStackView = {
+        let sv = UIStackView()
+        sv.axis = .horizontal
+        sv.alignment = .center
+        sv.distribution = .fill        // default; we’ll change to .equalCentering for destructive
+        sv.spacing = 16
+        sv.translatesAutoresizingMaskIntoConstraints = false
+        sv.isUserInteractionEnabled = false
+        return sv
+    }()
+    
     
     
     private var switchAction: ((Bool) -> Void)?
-    private var centeredTitleConstraint: NSLayoutConstraint?
     private var rowHeightConstraint: NSLayoutConstraint?
     
     
@@ -128,29 +138,21 @@ final class SettingsRowView: UIControl {
         
         iconContainerView.addSubview(iconImageView)
         
-        let stackView = UIStackView(arrangedSubviews: [
-            iconContainerView,
-            titleLabel,
-            trailingContainer
-        ])
-        stackView.axis = .horizontal
-        stackView.spacing = 16
-        stackView.alignment = .center
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-        stackView.isUserInteractionEnabled = false
+        hStack.addArrangedSubview(iconContainerView)
+        hStack.addArrangedSubview(titleLabel)
+        hStack.addArrangedSubview(trailingContainer)
         
         iconContainerView.isUserInteractionEnabled = false
         titleLabel.isUserInteractionEnabled = false
         
-        addSubview(highlightOverlay) // add first so it sits behind
+        addSubview(highlightOverlay)
         highlightOverlay.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stackView)
+        addSubview(hStack)
         
         rowHeightConstraint = heightAnchor.constraint(equalToConstant: Design.Row.height)
         rowHeightConstraint?.isActive = true
         
         NSLayoutConstraint.activate([
-            
             iconContainerView.widthAnchor.constraint(equalToConstant: 30),
             iconContainerView.heightAnchor.constraint(equalToConstant: 30),
             
@@ -159,16 +161,18 @@ final class SettingsRowView: UIControl {
             
             trailingContainer.widthAnchor.constraint(greaterThanOrEqualToConstant: 44),
             
-            stackView.topAnchor.constraint(equalTo: topAnchor),
-            stackView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            stackView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            stackView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            // Replace stackView constraints with hStack
+            hStack.topAnchor.constraint(equalTo: topAnchor),
+            hStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            hStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            hStack.bottomAnchor.constraint(equalTo: bottomAnchor),
             
             highlightOverlay.topAnchor.constraint(equalTo: topAnchor),
             highlightOverlay.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             highlightOverlay.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             highlightOverlay.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
+        
         trailingContainer.addSubview(accessoryImageView)
         trailingContainer.addSubview(accessorySwitch)
         trailingContainer.addSubview(detailLabel)
@@ -176,13 +180,12 @@ final class SettingsRowView: UIControl {
         accessorySwitch.translatesAutoresizingMaskIntoConstraints = false
         
         NSLayoutConstraint.activate([
-            // Chevron
             accessoryImageView.centerYAnchor.constraint(equalTo: trailingContainer.centerYAnchor),
             accessoryImageView.trailingAnchor.constraint(equalTo: trailingContainer.trailingAnchor),
             
-            // Switch
             accessorySwitch.centerYAnchor.constraint(equalTo: trailingContainer.centerYAnchor),
             accessorySwitch.trailingAnchor.constraint(equalTo: trailingContainer.trailingAnchor),
+            
             detailLabel.centerYAnchor.constraint(equalTo: trailingContainer.centerYAnchor),
             detailLabel.trailingAnchor.constraint(equalTo: trailingContainer.trailingAnchor)
         ])
@@ -196,9 +199,7 @@ final class SettingsRowView: UIControl {
         iconContainerView.isHidden = false
         trailingContainer.isHidden = false
         titleLabel.textAlignment = .natural
-        
-        // If we previously activated the centered constraint, disable it now by default
-        centeredTitleConstraint?.isActive = false
+        hStack.distribution = .fill
         
         switch accessoryType {
         case .chevron:
@@ -218,19 +219,14 @@ final class SettingsRowView: UIControl {
             detailLabel.isHidden = false
             
         case .centeredDestructive:
-            // Hide side chrome
+            // Hide chrome
             iconContainerView.isHidden = true
             trailingContainer.isHidden = true
-            detailLabel.isHidden = true
             
-            // Center the title
+            // Center the only remaining arranged subview by using the stack’s distribution
+            hStack.distribution = .equalCentering
             titleLabel.textAlignment = .center
             titleLabel.textColor = .systemRed
-            
-            if centeredTitleConstraint == nil {
-                centeredTitleConstraint = titleLabel.centerXAnchor.constraint(equalTo: self.centerXAnchor)
-            }
-            centeredTitleConstraint?.isActive = true
         case .none:
             break
         }

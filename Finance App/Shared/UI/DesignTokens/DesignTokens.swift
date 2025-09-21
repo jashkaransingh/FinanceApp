@@ -9,7 +9,7 @@ import UIKit
 
 /// Global design tokens. Read-only, app-wide.
 enum Design {
-
+    
     // MARK: - Corner radii (pt)
     enum Radius {
         static let xs: CGFloat = 8      // tiny chips
@@ -21,7 +21,7 @@ enum Design {
         static let capsule: CGFloat = 16
     }
     static let cornerCurve: CALayerCornerCurve = .continuous
-
+    
     // MARK: - Spacing (pt)
     enum Space {
         static let xs: CGFloat = 8
@@ -30,7 +30,7 @@ enum Design {
         static let lg: CGFloat = 20
         static let xl: CGFloat = 24
     }
-
+    
     // MARK: - Hairline
     enum Hairline {
         static var width: CGFloat { 1.0 / UIScreen.main.scale } // 1px
@@ -46,24 +46,24 @@ enum Design {
     enum Row {
         static let height: CGFloat = 56
     }
-
+    
     
     // MARK: - Opacity / Dimming
     enum Alpha {
         /// The translucency used for GradientBackgroundView across settings screens
         static let gradientBackground: CGFloat = 0.06
     }
-
+    
     enum Glass {
         /// The dimming value for GlassCardView in dark mode
         static let cardDimming: CGFloat = 0.22
     }
-
+    
     // MARK: - Surfaces (dynamic colors)
     enum Surface {
         /// Page background for settings/profile screens
         static let page = UIColor.systemGroupedBackground
-
+        
         /// Card/container fill
         static let card: UIColor = UIColor { tc in
             // Light: soft grouped card; Dark: subtle brightening
@@ -73,7 +73,7 @@ enum Design {
                 return UIColor.secondarySystemGroupedBackground
             }
         }
-
+        
         /// Row/container fill (can match card; separate in case we tweak later)
         static let row: UIColor = UIColor { tc in
             if tc.userInterfaceStyle == .dark {
@@ -83,20 +83,20 @@ enum Design {
             }
         }
     }
-
+    
     // MARK: - Helpers to apply styles (optional but handy)
     static func applyCardStyle(to view: UIView) {
         view.backgroundColor = Surface.card
         view.layer.cornerRadius = Radius.card
         view.layer.cornerCurve = cornerCurve
     }
-
+    
     static func applyRowStyle(to view: UIView) {
         view.backgroundColor = Surface.row
         view.layer.cornerRadius = Radius.row
         view.layer.cornerCurve = cornerCurve
     }
-
+    
     static func applyHairlineBorder(to view: UIView) {
         view.layer.borderColor = Hairline.color.cgColor
         view.layer.borderWidth = Hairline.width
