@@ -53,7 +53,9 @@ class SettingsViewController: UIViewController {
     )
     
     private lazy var bankConnectionsRow = SettingsRowView(icon: UIImage(systemName: "building.columns.fill"), iconBackgroundColor: .systemIndigo, title: "Bank Connections")
+    
     private lazy var notificationsRow = SettingsRowView(icon: UIImage(systemName: "bell.badge.fill"), iconBackgroundColor: .systemRed, title: "Notifications")
+    
     private lazy var appearanceRow = SettingsRowView(icon: UIImage(systemName: "moon.fill"), iconBackgroundColor: .systemPurple, title: "Appearance")
     
     private lazy var versionRow: SettingsRowView = {
@@ -68,7 +70,14 @@ class SettingsViewController: UIViewController {
     }()
     
     private lazy var termsRow = SettingsRowView(icon: UIImage(systemName: "doc.text.fill"), iconBackgroundColor: .systemGray2, title: "Terms of Service")
+    
     private lazy var privacyRow = SettingsRowView(icon: UIImage(systemName: "hand.raised.fill"), iconBackgroundColor: .systemGray2, title: "Privacy Policy")
+    
+    private lazy var reportBugRow = SettingsRowView(
+        icon: UIImage(systemName: "ladybug.fill"),
+        iconBackgroundColor: .systemPink,
+        title: "Report a Bug"
+    )
     
     private lazy var signOutRow: SettingsRowView = {
         let row = SettingsRowView(icon: nil, iconBackgroundColor: .clear, title: "Sign Out",  accessoryType: .centeredDestructive)
@@ -153,11 +162,15 @@ class SettingsViewController: UIViewController {
         mainStackView.addArrangedSubview(SectionHeaderLabel(title: "About"))
         let aboutCard = GlassCardView(appearance: cardAppearance)
         addRowsToCard(aboutCard,
-                      rows: [ versionRow,
-                              makeDivider(),
-                              termsRow,
-                              makeDivider(),
-                              privacyRow ])
+                      rows: [
+                        reportBugRow,
+                        makeDivider(),
+                        versionRow,
+                        makeDivider(),
+                        termsRow,
+                        makeDivider(),
+                        privacyRow
+                      ])
         mainStackView.addArrangedSubview(aboutCard)
         
         // --- Sign Out Section ---
@@ -175,6 +188,7 @@ class SettingsViewController: UIViewController {
         versionRow.addTarget(self, action: #selector(versionTapped), for: .touchUpInside)
         termsRow.addTarget(self, action: #selector(termsTapped), for: .touchUpInside)
         privacyRow.addTarget(self, action: #selector(privacyTapped), for: .touchUpInside)
+        reportBugRow.addTarget(self, action: #selector(reportBugTapped), for: .touchUpInside)
         signOutRow.addTarget(self, action: #selector(signOutTapped), for: .touchUpInside)
     }
     
@@ -268,7 +282,10 @@ class SettingsViewController: UIViewController {
         VersionInfoViewController.presentCompact(from: self)
     }
 
-
+    @objc private func reportBugTapped() {
+        let vc = ReportBugViewController()
+        navigationController?.pushViewController(vc, animated: true)
+    }
     
     private func configureLayout() {
         view.addSubview(gradientBackground)

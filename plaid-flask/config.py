@@ -18,3 +18,6 @@ elif PLAID_ENV == "production":
     PLAID_HOST = Environment.Production
 else:
     raise ValueError(f"Unsupported PLAID_ENV: {PLAID_ENV}")
+
+# AI Configuration
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")

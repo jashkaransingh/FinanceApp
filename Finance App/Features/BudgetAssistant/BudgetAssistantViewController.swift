@@ -6,6 +6,9 @@
 //
 
 import UIKit
+#if DEBUG
+import SwiftUI      // for debug screen
+#endif
 
 class BudgetAssistantViewController: UIViewController {
     
@@ -13,6 +16,18 @@ class BudgetAssistantViewController: UIViewController {
     private var currentPlanTotalBudget: Int = 0
     private var originalTransactions: [Transaction] = []
     private var debounceTimer: Timer?
+#if DEBUG
+    // Debug-only nav button to open the AI debug screen
+    private lazy var debugBarButton: UIBarButtonItem = {
+        let item = UIBarButtonItem(
+            title: "Debug",
+            style: .plain,
+            target: self,
+            action: #selector(didTapDebug)
+        )
+        return item
+    }()
+    #endif
     
     // UI Elements
     private let activityIndicator = UIActivityIndicatorView(style: .large)
@@ -172,6 +187,11 @@ class BudgetAssistantViewController: UIViewController {
     private func setupNavBar() {
         title = "Budget Assistant"
         navigationItem.leftBarButtonItem = UIBarButtonItem(customView: backButton)
+        
+#if DEBUG
+    // Show a "Debug" button on the right only in Debug builds
+    navigationItem.rightBarButtonItem = debugBarButton
+    #endif
         
         // Use a modern, adaptive appearance for the navigation bar.
         let appearance = UINavigationBarAppearance()
@@ -357,6 +377,16 @@ class BudgetAssistantViewController: UIViewController {
         navigationController?.popViewController(animated: true)
     }
     
+#if DEBUG
+    /// Opens the SwiftUI debug screen that talks directly to your /test/scenario and /ai/weekly_summary endpoints.
+    @objc private func didTapDebug() {
+        let debugView = DebugBudgetView()                     // 👈 your SwiftUI view
+        let hostingVC = UIHostingController(rootView: debugView)
+        hostingVC.modalPresentationStyle = .pageSheet         // or .fullScreen if you prefer
+        present(hostingVC, animated: true)
+    }
+    #endif
+    
     // Called when the user drags the main budget slider.
     @objc private func sliderDidChange() {
         let v = Int(round(budgetSlider.value / 10) * 10)
@@ -385,6 +415,7 @@ class BudgetAssistantViewController: UIViewController {
     @objc private func didTapStartOver() {
         transitionToInitialState()
     }
+    
     
     // MARK: – Data Logic
     private func loadSavedPlan() {

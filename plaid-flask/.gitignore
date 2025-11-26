@@ -8,7 +8,11 @@ pyvenv.cfg
 
 # Generated cache files
 ai_weekly_cache.json
+ai_cache.json
 
 # Secrets
 .env
 serviceAccountKey.json
+
+# macOS specific
+.DS_Store

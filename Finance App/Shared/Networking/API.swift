@@ -18,6 +18,7 @@ enum API {
     case transactions
     case summaries
     case aiSummary
+    case aiReallocate
     case budget
     
     /// Full URL for the endpoint
@@ -36,6 +37,8 @@ enum API {
             path = "/summaries"
         case .aiSummary:
             path = "/ai/weekly_summary"
+        case .aiReallocate:
+            path = "/ai/reallocate"
         case .budget:
             path = "/budget"
             

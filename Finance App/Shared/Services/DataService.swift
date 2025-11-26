@@ -59,32 +59,62 @@ final class DataService {
     }
     
     /// Fetches transactions for a given period.
-    static func loadTransactions(
-        startDate: String? = nil,
-        endDate: String? = nil,
-        period: String? = nil,
-        completion: @escaping (Result<[Transaction], NetworkError>) -> Void
-    ) {
-        // 1. Start with an empty dictionary of the correct type.
-        var queries: [String: String] = [:]
-        
-        // 2. Conditionally add the parameters that exist.
-        if let period = period {
-            queries["period"] = period
-        } else if let startDate = startDate, let endDate = endDate {
-            queries["start_date"] = startDate
-            queries["end_date"] = endDate
+    /// Fetches transactions for a given period.
+        static func loadTransactions(
+            startDate: String? = nil,
+            endDate: String? = nil,
+            period: String? = nil,
+            completion: @escaping (Result<[Transaction], NetworkError>) -> Void
+        ) {
+            
+    #if DEBUG
+            // --- THIS IS THE NEW LOGIC ---
+            // FOR TESTING: Override the network call to fetch a clean test scenario
+            // instead of live (and messy) Plaid data.
+            
+            // 1. Construct the URL to your test endpoint.
+            //    (You must replace "127.0.0.1" with your computer's IP if testing on a real device)
+            guard let url = URL(string: "http://127.0.0.1:5050/test/scenario/college_student") else {
+                completion(.failure(.badURL))
+                return
+            }
+            
+            print("✅ DEBUG: Loading 'college_student' test data...")
+            
+            // 2. Make the network call to the test endpoint
+            NetworkService.getJSON(
+                from: url,
+                queries: [:], // No queries needed
+                decodeTo: TransactionsResponse.self
+            ) { result in
+                completion(result.map { $0.transactions })
+            }
+            
+    #else
+            // --- THIS IS YOUR ORIGINAL PRODUCTION CODE ---
+            // It will run as normal when you are not in a DEBUG build.
+            
+            // 1. Start with an empty dictionary of the correct type.
+            var queries: [String: String] = [:]
+            
+            // 2. Conditionally add the parameters that exist.
+            if let period = period {
+                queries["period"] = period
+            } else if let startDate = startDate, let endDate = endDate {
+                queries["start_date"] = startDate
+                queries["end_date"] = endDate
+            }
+            
+            // 3. Make the network call with the safely-built dictionary.
+            NetworkService.getJSON(
+                from: API.transactions.url,
+                queries: queries,
+                decodeTo: TransactionsResponse.self
+            ) { result in
+                completion(result.map { $0.transactions })
+            }
+    #endif
         }
-        
-        // 3. Make the network call with the safely-built dictionary.
-        NetworkService.getJSON(
-            from: API.transactions.url,
-            queries: queries,
-            decodeTo: TransactionsResponse.self
-        ) { result in
-            completion(result.map { $0.transactions })
-        }
-    }
     
     /// Fetches an AI-generated spending plan.
     static func fetchAISuggestion(
@@ -120,7 +150,7 @@ final class DataService {
         )
         
         NetworkService.postJSON(
-            to: API.aiSummary.url,
+            to: API.aiReallocate.url,
             body: body,
             decodeTo: AISuggestionResponse.self
         ) { result in

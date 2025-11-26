@@ -10,6 +10,7 @@ from routes.transactions import tx_bp
 from routes.sandbox      import sb_bp
 import routes.ai as ai_module
 from routes.webhook import webhook_bp
+from routes.testing import testing_bp
 
 # MARK: – Application Setup
 # --- NEW: Initialize Firebase Admin SDK ---
@@ -46,6 +47,7 @@ app.register_blueprint(ai_module.ai_bp)
 
 app.register_blueprint(webhook_bp)
 
+app.register_blueprint(testing_bp)
 
 # MARK: – Health Check & Miscellaneous Routes
 

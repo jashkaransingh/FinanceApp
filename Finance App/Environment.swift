@@ -11,7 +11,7 @@ enum Environment {
     static var baseURL: String {
         #if DEBUG
             // This points to your local machine
-        return "https://financeapp-9wxw.onrender.com"
+        return "http://127.0.0.1:5050"
         #else
         return "https://financeapp-9wxw.onrender.com"
         #endif

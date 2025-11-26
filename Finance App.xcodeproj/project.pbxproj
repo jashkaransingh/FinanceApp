@@ -507,6 +507,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Finance App/Info.plist";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "To secure your financial data";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Allow picking a screenshot to include in bug reports";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -540,6 +541,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Finance App/Info.plist";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "To secure your financial data";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Allow picking a screenshot to include in bug reports";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
