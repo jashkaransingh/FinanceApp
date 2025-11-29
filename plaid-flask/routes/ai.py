@@ -40,87 +40,100 @@ def _recalculate_budget_plan(
     total_budget: int
 ) -> dict:
     """
-    "Heals" the AI suggestion by recalculating all amounts, percentages,
-    AND subtitles based on our accurate median_cost data.
+    "Heals" the AI suggestion.
+    
+    NEW in v4: This now returns a "flat" dictionary where EACH MERCHANT
+    is a top-level key. This is for the new "aesthetic as fuck" UI.
     """
     final_plan = {}
-    total_allocated = 0
+    total_allocated = 0 # This will be a sum of integers
 
-    # 1. Loop through all categories from the AI (e.g., "Food & Dining")
-    for category, details in ai_suggestion.items():
+    # 1. Loop through all CATEGORIES from the AI (e.g., "Food & Dining")
+    #    We do this *only* to get the category name for coloring.
+    for category_name, details in ai_suggestion.items():
         subtitle = details.get("subtitle", "")
         
         # Skip the "Everything Else" category for now
-        if category.lower() == "everything else":
+        if category_name.lower() == "everything else":
             continue
 
         # 2. Parse the AI's subtitle string, e.g., "Starbucks (2 visits)"
         merchants_in_subtitle = _parse_subtitle_string(subtitle)
         
-        category_total_amount = 0
-        
-        # --- Build a clean subtitle ---
-        clean_subtitle_parts = []
-        # ------------------------------
-        
-        # 3. Look up each merchant in our "patterns" data and do the math
+        # 3. Look up EACH MERCHANT and add it to the final_plan
         for merchant_name, visit_count in merchants_in_subtitle.items():
-            # Only add to plan if they are visiting at least once
             if visit_count > 0 and merchant_name in patterns:
-                # Get the *accurate* median cost from our analyzer
-                cost_per_visit = patterns[merchant_name]["median_cost_per_visit"]
-                # Calculate the true cost
-                category_total_amount += cost_per_visit * visit_count
                 
-                # --- Add to our clean subtitle ---
-                # Find the original "visit" string (e.g., "visit", "ride", "month")
-                visit_word = "visit" # default
-                # Regex to find the *first* word after the number
+                # 4. Get the *accurate* median cost from our analyzer
+                cost_per_visit = patterns[merchant_name]["median_cost_per_visit"]
+                merchant_total_amount = cost_per_visit * visit_count
+                
+                # --- THIS IS THE BUG FIX ---
+                # We ceil the final merchant amount to get an integer
+                final_merchant_amount_int = math.ceil(merchant_total_amount)
+                
+                # We add *that integer* to the total_allocated
+                total_allocated += final_merchant_amount_int
+                # ---------------------------
+
+                # 5. Create a new, simpler subtitle
+                plural_word = "visits"   # default
+                singular_word = "visit"  # default
+
+                # Find the visit word from the AI's *first* example
                 match = re.search(r"\(\d+\s+(\w+)", subtitle)
                 if match:
-                    visit_word = match.group(1)
-                
-                clean_subtitle_parts.append(f"{merchant_name} ({visit_count} {visit_word})")
+                    plural_word = match.group(1) # e.g., "visits", "rides", "month"
 
-        # 4. Add the 100% accurate category to our new plan
-        if category_total_amount > 0:
-            total_allocated += category_total_amount
-            
-            final_subtitle = ", ".join(clean_subtitle_parts)
-            
-            final_plan[category] = {
-                "amount": math.ceil(category_total_amount), # Round up
-                "percent": 0, # Will calculate later
-                "subtitle": final_subtitle
-            }
+                    if plural_word == "rides":
+                        singular_word = "ride"
+                    elif plural_word.endswith("s"):
+                        singular_word = plural_word[:-1] # "visits" -> "visit"
+                    else:
+                        singular_word = plural_word      # "month" -> "month"
 
-    # 5. Calculate the "Everything Else" amount
-    everything_else_amount = total_budget - math.ceil(total_allocated)
+                # Now, build the "f-ing proper" subtitle
+                current_visit_word = plural_word if visit_count != 1 else singular_word
 
-    # 6. Add the "Everything Else" category
-    #    (Ensure it's not negative if AI over-allocates)
-    final_plan["Everything Else"] = {
-        "amount": max(0, everything_else_amount),
-        "percent": 0,
-        "subtitle": "For one-off purchases and things you forgot"
-    }
+                new_subtitle = f"{visit_count} {current_visit_word} at ${cost_per_visit:.2f}/{singular_word}"
 
-    # 7. Final pass to calculate all percentages
-    #    (Handle division by zero if total_budget is 0)
+                # 6. Add the MERCHANT to the final plan
+                final_plan[merchant_name] = {
+                    "amount": final_merchant_amount_int,
+                    "percent": 0,
+                    "subtitle": new_subtitle,
+                    "category": category_name, # <-- NEW: For app coloring
+                    "cost_per_visit": cost_per_visit, # <-- NEW: For stepper logic
+                    "visits": visit_count # <-- NEW: For stepper logic
+                }
+
+    # 7. Calculate the "Everything Else" amount
+    everything_else_amount = total_budget - total_allocated
+
+    # 8. Add the "Everything Else" category
+    final_plan["Buffer"] = {
+    "amount": max(0, everything_else_amount),
+    "percent": 0,
+    "subtitle": "Anything extra you wanna spend",
+    "category": "Buffer",
+    "cost_per_visit": 0,
+    "visits": 0
+}
+
+    # 9. Final pass to calculate all percentages
     if total_budget > 0:
-        # Recalculate total in case "Everything Else" was capped at 0
         final_total = sum(details["amount"] for details in final_plan.values())
-        
-        for category in final_plan:
-            amount = final_plan[category]["amount"]
-            # Base percentage on the final total, which might be > total_budget
-            # if AI over-allocated, but it's the most honest representation.
-            percent = (amount / final_total) * 100
-            final_plan[category]["percent"] = round(percent)
+        if final_total > 0:
+            for key in final_plan:
+                amount = final_plan[key]["amount"]
+                percent = (amount / final_total) * 100
+                final_plan[key]["percent"] = round(percent)
+        else:
+             for key in final_plan:
+                final_plan[key]["percent"] = 0
     else:
-        # Handle edge case where budget is 0
-        for category in final_plan:
-            final_plan[category]["percent"] = 0
+        for key in final_plan:
+            final_plan[key]["percent"] = 0
             
     return final_plan
 
@@ -174,17 +187,66 @@ def save_budget():
             'totalBudget': total_budget
         })
         
-        print(f"✅ Budget plan saved for user {uid}")
+        print(f"Budget plan saved for user {uid}")
         return jsonify(success=True), 200
         
     except Exception as e:
         traceback.print_exc()
         return jsonify(error=str(e)), 500
 
+@ai_bp.route("/ai/frequent_merchants", methods=["POST"])
+def get_frequent_merchants():
+    """
+    Analyzes a user's transactions and returns a sorted list of
+    their most frequent merchants (habits).
+    """
+    try:
+        # 1. Verify user
+        id_token = request.headers.get('Authorization').split('Bearer ')[1]
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        print(f"Verified user for frequent merchants: {uid}")
+    except Exception as e:
+        return jsonify(error="Invalid token.", details=str(e)), 401
+
+    try:
+        # 2. Parse request
+        data = request.get_json(force=True)
+        transactions = data.get("transactions", [])
+        
+        # 3. Analyze spending patterns (using our existing analyzer)
+        from services.budget_analyzer import analyze_spending_patterns
+        patterns = analyze_spending_patterns(transactions)
+        
+        if not patterns:
+            return jsonify(merchants=[])
+
+        # 4. Format the patterns into a clean list for the iOS app
+        merchants_list = []
+        for name, info in patterns.items():
+            merchants_list.append({
+                "name": name,
+                "total_visits": info["total_visits"],
+                "median_cost": info["median_cost_per_visit"],
+                "category": info["category"] # Pass this to the app for UI icons
+            })
+
+        # 5. Sort the list by most visits first
+        sorted_list = sorted(merchants_list, key=lambda x: x["total_visits"], reverse=True)
+        
+        # 6. Return the top 10 habits
+        return jsonify(merchants=sorted_list[:10])
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify(error=f"Failed to analyze merchants: {str(e)}"), 500
 
 @ai_bp.route("/ai/weekly_summary", methods=["POST"])
 def weekly_summary():
-    """Generates a frequency-based budget plan."""
+    """
+    Generates a frequency-based budget plan based on a user's
+    pre-selected merchants.
+    """
     try:
         # 1. Verify user
         id_token = request.headers.get('Authorization').split('Bearer ')[1]
@@ -201,6 +263,12 @@ def weekly_summary():
     transactions = data.get("transactions", [])
     total_budget = data.get("total_budget") or data.get("weekly_budget", 100)
     
+    # --- THIS IS THE NEW LOGIC (Task 2a) ---
+    # Get the list of merchants the user pre-selected.
+    # It might be empty or None if they skipped the selection step.
+    selected_merchants = data.get("selected_merchants")
+    # ----------------------------------------
+
     # 3. Analyze spending patterns
     from services.budget_analyzer import analyze_spending_patterns
     patterns = analyze_spending_patterns(transactions)
@@ -210,7 +278,7 @@ def weekly_summary():
     # 4. Handle no patterns case
     if not patterns:
         return jsonify(suggestion={
-            "Everything Else": { # Changed from "Savings" to be consistent
+            "Buffer": { # Changed to be consistent
                 "amount": total_budget,
                 "percent": 100,
                 "subtitle": "No recurring expenses found"
@@ -219,26 +287,45 @@ def weekly_summary():
     
     # 5. Build prompt
     merchant_examples = []
-    for merchant, info in sorted(patterns.items(), key=lambda x: x[1]['total_spent'], reverse=True):
-        merchant_examples.append(
-            f"  - {merchant}: {info['total_visits']} visits in 6 weeks (${info['median_cost_per_visit']:.0f} per visit)"
-        )
     
+    # --- THIS IS THE NEW PROMPT LOGIC (Task 2a) ---
+    if selected_merchants:
+        # User selected specific merchants. Only use those.
+        print(f"✅ User selected {len(selected_merchants)} merchants.")
+        for name in selected_merchants:
+            if name in patterns:
+                info = patterns[name]
+                merchant_examples.append(
+                    f"  - {name}: {info['total_visits']} visits in 6 weeks (${info['median_cost_per_visit']:.0f} per visit)"
+                )
+    else:
+        # No selection. Fall back to the original behavior (top 5).
+        print("No merchants selected. Building plan from top 5 habits.")
+        # We limit to top 5 to keep the prompt clean
+        for merchant, info in sorted(patterns.items(), key=lambda x: x[1]['total_spent'], reverse=True)[:5]:
+            merchant_examples.append(
+                f"  - {merchant}: {info['total_visits']} visits in 6 weeks (${info['median_cost_per_visit']:.0f} per visit)"
+            )
+    # -----------------------------------------------
+
     merchants_list = "\n".join(merchant_examples)
     print(f"📋 Sending to Gemini:\n{merchants_list}")
     
+    # --- THIS IS THE NEW PROMPT STRING (Task 2a) ---
     prompt = f"""You are a friendly and practical budget assistant. Your job is to create a SIMPLE weekly spending plan for **discretionary** ("fun money") spending.
 
 ---
 WEEKLY BUDGET: ${total_budget}
-PAST 6 WEEKS OF SPENDING:
+USER'S PRE-SELECTED HABITS:
 {merchants_list}
 
 Each line shows: Merchant, total visits in 6 weeks, and the user's *typical* cost per visit.
 ---
 
 YOUR JOB:
-Create a plan that shows the user HOW MANY TIMES they can visit their usual places this week and stay within their ${total_budget} budget.
+Create a plan that **budgets *only* for the merchants listed under USER'S PRE-SELECTED HABITS.**
+The user has pre-selected these as important.
+Show the user HOW MANY TIMES they can visit these *specific* places this week and stay within their ${total_budget} budget.
 
 RULES (FOLLOW THESE *EXACTLY*):
 
@@ -252,16 +339,17 @@ RULES (FOLLOW THESE *EXACTLY*):
     * Use the typical cost provided (e.g., "Starbucks: 2 visits" at $6/visit = $12).
     * Round all calculated amounts to the nearest whole dollar.
 
-3.  **CREATE AN "EVERYTHING ELSE" CATEGORY.**
-    * First, budget for the merchants you can confidently estimate (like Starbucks, Uber, Chipotle).
+3.  **CREATE A "BUFFER" CATEGORY.**
+    * First, budget for the selected merchants.
     * Then, add up their total: (e.g., $12 for Starbucks + $20 for Uber = $32).
     * Subtract this total from the main budget: (${total_budget} - $32 = ${total_budget - 32}).
-    * Put ALL remaining money into a single category named **"Everything Else"**.
+    * Put ALL remaining money into a single category named **"Buffer"**.
     * This "Everything Else" category MUST make the grand total equal **${total_budget} EXACTLY**.
 
-4.  **KEEP IT SIMPLE.**
-    * Do not budget for more than 5 specific merchants.
-    * It is OK to give "0 visits" to places that are rare or too expensive for the budget.
+4.  **STICK TO THE LIST.**
+    * You MUST create a plan for *every* merchant in the list.
+    * It is OK to give "0 visits" to places if the budget is too tight.
+    * Do NOT include any merchants that are *not* in the list.
     * Group merchants into logical categories: "Food & Dining", "Transportation", "Entertainment", "Shopping & Other", and "Everything Else".
 
 OUTPUT FORMAT:
@@ -275,25 +363,31 @@ Use this exact shape. **DO NOT include "amount" or "percent" fields.**
   "Transportation": {{
     "subtitle": "Uber (2 rides)"
   }},
-  "Everything Else": {{
-    "subtitle": "For one-off purchases and things you forgot"
-  }}
+  "Buffer": {{
+    "subtitle": "Anything extra you wanna spend"
+    }}
 }}
 
 Constraints:
-- You MUST return an "Everything Else" category.
+- You MUST return a "Buffer" category.
 - `subtitle` MUST mention visits/rides/nights like "X (N visits)".
 """
-
+    # -------------------------------------------
     
     # 6. Check cache
     tx_string = json.dumps(transactions, sort_keys=True)
     tx_hash = hashlib.md5(tx_string.encode()).hexdigest()
-    cache_key = f"{uid}:{total_budget}:{tx_hash}:v2"  # v2 to bust old cache
+    
+    # --- NEW CACHE KEY (Task 2a) ---
+    # Create a stable hash for the selected merchants list
+    merchants_string = json.dumps(selected_merchants, sort_keys=True)
+    merchants_hash = hashlib.md5(merchants_string.encode()).hexdigest()
+    cache_key = f"{uid}:{total_budget}:{tx_hash}:{merchants_hash}:v3" # v3 for new logic
+    # -------------------------------
     
     cached = get_cached_summary(cache_key)
     if cached:
-        print("✅ Cache hit")
+        print("Cache hit")
         return jsonify(suggestion=cached)
     
     # 7. Call Claude
@@ -312,13 +406,13 @@ Constraints:
         ai_suggestion = json.loads(cleaned)
         
         # 2. "Heal" the suggestion using our Python code and patterns data
-        print(f"🧠 AI raw suggestion: {ai_suggestion}")
+        print(f"AI raw suggestion: {ai_suggestion}")
         suggestion = _recalculate_budget_plan(
             ai_suggestion=ai_suggestion,
             patterns=patterns,  # We already have this from the analyzer!
             total_budget=total_budget
         )
-        print(f"✅ Healed suggestion: {suggestion}")
+        print(f" Healed suggestion: {suggestion}")
 
     except Exception as err:
         print(f"Claude call/parse error: {err}")
@@ -359,7 +453,7 @@ def reallocate_budget():
         id_token = request.headers.get('Authorization').split('Bearer ')[1]
         decoded_token = auth.verify_id_token(id_token)
         uid = decoded_token['uid']
-        print(f"✅ Verified user for AI reallocation: {uid}")
+        print(f" Verified user for AI reallocation: {uid}")
     except Exception as e:
         return jsonify(error="Invalid token.", details=str(e)), 401
 
@@ -403,6 +497,8 @@ def reallocate_budget():
     remaining_budget = total_budget - new_value
     
     # 5. Build the prompt
+    # (The prompt is unchanged, as the AI only needs to know the subtitles,
+    #  not the new "merchants" array. This is good.)
     prompt = f"""You are a budget assistant. A user has locked one category and wants to re-allocate the *remaining* money among their other categories.
 
 TOTAL BUDGET: ${total_budget}
@@ -418,7 +514,7 @@ Intelligently re-distribute the ${remaining_budget} across the *unlocked* catego
 RULES:
 1.  The user's past spending habits (for context):
 {json.dumps(patterns, indent=2)}
-2.  The "Everything Else" category should absorb most of the changes.
+2.  The "Buffer" category should absorb most of the changes.
 3.  The final plan (locked + unlocked) must sum to ${total_budget}.
 4.  You MUST return a plan that includes the *visit counts* in the subtitle, just like you did before.
 
@@ -433,8 +529,8 @@ Use this exact shape. **DO NOT include "amount" or "percent" fields.**
   "Transportation": {{
     "subtitle": "Uber (0 rides)"
   }},
-  "Everything Else": {{
-    "subtitle": "For one-off purchases"
+  "Buffer": {{
+    "subtitle": "Anything extra you wanna spend"
   }}
 }}
 """
@@ -456,6 +552,10 @@ Use this exact shape. **DO NOT include "amount" or "percent" fields.**
         # IMPORTANT: We only heal the *unlocked* categories
         print(f"🧠 AI raw re-allocation: {ai_suggestion}")
         
+        # --- THIS IS THE KEY ---
+        # Our *new* _recalculate_budget_plan function is called here.
+        # It will automatically add the "merchants" array to all
+        # the *unlocked* categories (including "Everything Else").
         healed_plan = _recalculate_budget_plan(
             ai_suggestion=ai_suggestion,
             patterns=patterns,
@@ -463,15 +563,21 @@ Use this exact shape. **DO NOT include "amount" or "percent" fields.**
         )
         
         # 3. Add the locked category back in
-        #    We get the subtitle from the current_plan, which is clean
-        #    because it was generated by our healer in the first place.
-        locked_subtitle = current_plan.get(locked_category, {}).get("subtitle", "")
+        #    We must now *also* add the "merchants" array back in,
+        #    which we get from the "current_plan" sent by the app.
+        
+        # --- THIS BLOCK IS THE ONLY CHANGE ---
+        locked_category_details = current_plan.get(locked_category, {})
+        locked_subtitle = locked_category_details.get("subtitle", "")
+        locked_merchants = locked_category_details.get("merchants", []) # <-- NEW
         
         healed_plan[locked_category] = {
             "amount": new_value,
             "percent": 0, # Will fix in a moment
-            "subtitle": locked_subtitle
+            "subtitle": locked_subtitle,
+            "merchants": locked_merchants # <-- NEW
         }
+        # -------------------------------------
 
         # 4. We must do a final pass to fix the "Everything Else" amount
         #    and all percentages, because our healer function was only
@@ -479,29 +585,36 @@ Use this exact shape. **DO NOT include "amount" or "percent" fields.**
         
         final_total_without_else = 0
         for category, details in healed_plan.items():
-            if category.lower() != "everything else":
+            if category.lower() != "buffer":
                 final_total_without_else += details["amount"]
         
         # Fix "Everything Else" amount
         final_else_amount = total_budget - final_total_without_else
         
         # Make sure "Everything Else" exists, even if AI didn't return it
-        if "Everything Else" not in healed_plan:
-             healed_plan["Everything Else"] = {"subtitle": "For one-off purchases"}
-             
-        healed_plan["Everything Else"]["amount"] = max(0, final_else_amount)
+        if "Buffer" not in healed_plan:
+            healed_plan["Buffer"] = {
+                "subtitle": "Anything extra you wanna spend",
+                "merchants": []
+            }
+
+        healed_plan["Buffer"]["amount"] = max(0, final_else_amount)
         
         # Fix all percentages
         if total_budget > 0:
             final_total = sum(details["amount"] for details in healed_plan.values())
-            for category, details in healed_plan.items():
-                amount = details["amount"]
-                details["percent"] = round((amount / final_total) * 100)
+            if final_total > 0:
+                for category, details in healed_plan.items():
+                    amount = details["amount"]
+                    details["percent"] = round((amount / final_total) * 100)
+            else:
+                for category, details in healed_plan.items():
+                    details["percent"] = 0
         else:
             for category, details in healed_plan.items():
                 details["percent"] = 0
 
-        print(f"✅ Healed re-allocation: {healed_plan}")
+        print(f" Healed re-allocation: {healed_plan}")
         
         return jsonify(suggestion=healed_plan)
 

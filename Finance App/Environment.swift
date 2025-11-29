@@ -6,15 +6,16 @@
 //
 import Foundation
 
-// Before
 enum Environment {
     static var baseURL: String {
-        #if DEBUG
-            // This points to your local machine
+#if DEBUG
+        // Local development server
         return "http://127.0.0.1:5050"
-        #else
+#else
+        // Production server
         return "https://financeapp-9wxw.onrender.com"
-        #endif
+#endif
     }
 }
+
 

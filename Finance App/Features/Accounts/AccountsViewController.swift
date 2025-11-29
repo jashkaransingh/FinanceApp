@@ -410,8 +410,69 @@ final class AccountsViewController: UIViewController {
     // MARK: – Actions
     /// The action for the main floating button.
     @objc private func didTapBudgetAssistant() {
-        let vc = BudgetAssistantViewController()
-        navigationController?.pushViewController(vc, animated: true)
+        // 1. Show a loading indicator
+        DispatchQueue.main.async {
+             UIApplication.shared.isNetworkActivityIndicatorVisible = true
+        }
+
+        // 2. THIS IS THE "SMART" FIX:
+        //    First, try to load an *existing* plan.
+        DataService.loadBudgetPlan { [weak self] loadResult in
+            guard let self = self else { return }
+
+            // This is a helper closure to load transactions.
+            // We need transactions for *both* flows (new or existing).
+            let transactionLoader: (@escaping ([Transaction]) -> Void) -> Void = { transactionCompletion in
+                let endDate = Date()
+                guard let startDate = Calendar.current.date(byAdding: .day, value: -42, to: endDate) else {
+                    DispatchQueue.main.async { UIApplication.shared.isNetworkActivityIndicatorVisible = false }
+                    return
+                }
+
+                let fmt = ISO8601DateFormatter()
+                fmt.formatOptions = [.withFullDate]
+                let startDateString = fmt.string(from: startDate)
+                let endDateString = fmt.string(from: endDate)
+
+                DataService.loadTransactions(startDate: startDateString, endDate: endDateString) { txResult in
+                    // Stop the loader *after* transactions are loaded
+                    DispatchQueue.main.async {
+                         UIApplication.shared.isNetworkActivityIndicatorVisible = false
+                         switch txResult {
+                         case .success(let transactions):
+                             transactionCompletion(transactions) // Send transactions to the next step
+                         case .failure(let error):
+                            print("❌ Failed to load transactions for Budget AI: \(error)")
+                            // TODO: Show a real alert to the user
+                         }
+                    }
+                }
+            }
+
+            // 3. Now, handle the result of the loadBudgetPlan call
+            switch loadResult {
+            case .success:
+                // --- FLOW A: PLAN EXISTS ---
+                // We have a plan. Load transactions and go *directly* to the assistant.
+                print("✅ Found existing budget plan. Loading transactions...")
+                transactionLoader { transactions in
+                    let vc = BudgetAssistantViewController(
+                        transactions: transactions,
+                        selectedMerchants: nil // This is the key! This tells the VC to load the saved plan.
+                    )
+                    self.navigationController?.pushViewController(vc, animated: true)
+                }
+
+            case .failure:
+                // --- FLOW B: NO PLAN EXISTS (404 Error) ---
+                // This is the new user flow. Go to the Habit Selector.
+                print("ℹ️ No budget plan found. Starting new user flow...")
+                transactionLoader { transactions in
+                    let vc = BudgetHabitSelectorViewController(transactions: transactions)
+                    self.navigationController?.pushViewController(vc, animated: true)
+                }
+            }
+        }
     }
     
     /// The new, correct action for the "Connect Bank" placeholder button.

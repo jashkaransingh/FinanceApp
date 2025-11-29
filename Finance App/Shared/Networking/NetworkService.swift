@@ -10,32 +10,34 @@ import FirebaseAuth
 
 // MARK: - Types
 
-/// Generic helper for JSON-based POST and GET requests.
-enum HTTPMethod: String { case get = "GET", post = "POST" }
+/// Supported HTTP methods for JSON-based requests.
+enum HTTPMethod: String {
+    case get = "GET"
+    case post = "POST"
+}
 
 // MARK: - Service
 
-/// Generic helpers for authenticated JSON GET/POST requests.
-/// All completions are delivered on the main queue.
+/// Helper for authenticated JSON GET/POST requests.
+/// All completion handlers are invoked on the main queue.
 struct NetworkService {
     
-    // MARK: Core executor
+    // MARK: - Core Executor
+    
     private static func executeRequest<T: Decodable>(
         _ request: URLRequest,
         decodeTo type: T.Type,
         completion: @escaping (Result<T, NetworkError>) -> Void
     ) {
-        // 1. Check for a current user. If none exists, the session is effectively expired.
+        // Ensure there is a signed-in user
         guard let user = Auth.auth().currentUser else {
             DispatchQueue.main.async { completion(.failure(.sessionExpired)) }
             return
         }
         
-        // 2. Get a fresh, valid token. Firebase handles caching and refreshing behind the scenes.
+        // Obtain a valid ID token
         user.getIDTokenResult(forcingRefresh: false) { result, error in
-            // 3. Handle token errors. This is where we detect an invalid session.
             if let error = error {
-                // Check if the error code indicates an expired or invalid token.
                 let errorCode = (error as NSError).code
                 if errorCode == AuthErrorCode.userTokenExpired.rawValue ||
                     errorCode == AuthErrorCode.invalidUserToken.rawValue ||
@@ -43,7 +45,9 @@ struct NetworkService {
                     
                     DispatchQueue.main.async { completion(.failure(.sessionExpired)) }
                 } else {
-                    DispatchQueue.main.async { completion(.failure(.serverError(message: error.localizedDescription))) }
+                    DispatchQueue.main.async {
+                        completion(.failure(.serverError(message: error.localizedDescription)))
+                    }
                 }
                 return
             }
@@ -53,30 +57,39 @@ struct NetworkService {
                 return
             }
             
-            // 4. Add the valid token to the request's Authorization header.
+            // Attach the token to the Authorization header
             var authenticatedRequest = request
             authenticatedRequest.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
             
-            // 5. Perform the data task as before.
             URLSession.shared.dataTask(with: authenticatedRequest) { data, response, error in
                 if let error = error {
-                    return DispatchQueue.main.async { completion(.failure(.unknown(error))) }
+                    DispatchQueue.main.async { completion(.failure(.unknown(error))) }
+                    return
                 }
                 
-                if let httpResponse = response as? HTTPURLResponse, !(200...299).contains(httpResponse.statusCode) {
+                if let httpResponse = response as? HTTPURLResponse,
+                   !(200...299).contains(httpResponse.statusCode) {
                     let message = "Server returned status \(httpResponse.statusCode)"
-                    return DispatchQueue.main.async { completion(.failure(.serverError(message: message))) }
+                    DispatchQueue.main.async { completion(.failure(.serverError(message: message))) }
+                    return
                 }
                 
                 guard let data = data else {
-                    return DispatchQueue.main.async { completion(.failure(.serverError(message: "No data received"))) }
+                    DispatchQueue.main.async {
+                        completion(.failure(.serverError(message: "No data received")))
+                    }
+                    return
                 }
                 
-                // 6. Decode the JSON response, now using our custom error for decoding issues.
                 do {
                     let decoded = try JSONDecoder().decode(T.self, from: data)
                     DispatchQueue.main.async { completion(.success(decoded)) }
                 } catch {
+                    // Decoding diagnostics for development
+                    print("Decoding error for type \(T.self): \(error)")
+                    if let jsonString = String(data: data, encoding: .utf8) {
+                        print("Raw JSON response:\n\(jsonString)")
+                    }
                     DispatchQueue.main.async { completion(.failure(.decodingError(error))) }
                 }
             }
@@ -84,7 +97,7 @@ struct NetworkService {
         }
     }
     
-    // MARK: Public API
+    // MARK: - Public API
     
     /// Executes an authenticated JSON POST request.
     static func postJSON<T: Decodable, B: Encodable>(
@@ -101,19 +114,22 @@ struct NetworkService {
         executeRequest(request, decodeTo: type, completion: completion)
     }
     
-    /// Executes an authenticated GET request with optional query items.
+    /// Executes an authenticated JSON GET request with optional query items.
     static func getJSON<T: Decodable>(
         from url: URL,
         queries: [String: String]? = nil,
         decodeTo type: T.Type,
         completion: @escaping (Result<T, NetworkError>) -> Void
     ) {
-        var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        
         if let queries = queries {
-            comps.queryItems = queries.map { URLQueryItem(name: $0.key, value: $0.value) }
+            components.queryItems = queries.map { URLQueryItem(name: $0.key, value: $0.value) }
         }
-        guard let finalURL = comps.url else {
-            return DispatchQueue.main.async { completion(.failure(.badURL)) }
+        
+        guard let finalURL = components.url else {
+            DispatchQueue.main.async { completion(.failure(.badURL)) }
+            return
         }
         
         var request = URLRequest(url: finalURL)
@@ -122,5 +138,3 @@ struct NetworkService {
         executeRequest(request, decodeTo: type, completion: completion)
     }
 }
-
-

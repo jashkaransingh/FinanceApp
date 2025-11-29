@@ -17,24 +17,41 @@ struct Transaction: Codable, Hashable {
 }
 
 struct AccountSummary: Codable {
-    let periodTitle: String      // e.g. "Spent Today"
-    let amount: Double           // e.g. 64.30
-    let percentage: Double       // e.g. -11 (negative = down)
-    let subtitle: String         // e.g. "Yesterday $72.50"
-    let usesPieIcon: Bool        // true for “This Month”
+    let periodTitle: String     // e.g. "Spent Today"
+    let amount: Double          // e.g. 64.30
+    let percentage: Double      // e.g. -11 (negative = down)
+    let subtitle: String        // e.g. "Yesterday $72.50"
+    let usesPieIcon: Bool       // true for “This Month”
 }
 
-/// The structure of one item within the AI's budget suggestion.
-struct CategoryBudget: Codable {
+
+
+struct BudgetPlanItem: Codable, Identifiable, Hashable {
+    let id = UUID()
     let amount: Int
     let percent: Int
     let subtitle: String
+    let category: String // For coloring
+    let costPerVisit: Double
+    let visits: Int
+    
+    // We need this for the `currentPlan` dictionary in the VC
+    init(amount: Int, percent: Int, subtitle: String, category: String, costPerVisit: Double, visits: Int) {
+        self.amount = amount
+        self.percent = percent
+        self.subtitle = subtitle
+        self.category = category
+        self.costPerVisit = costPerVisit
+        self.visits = visits
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case amount, percent, subtitle, category
+        case costPerVisit = "cost_per_visit"
+        case visits
+    }
 }
-struct PlanItem: Codable {
-    let amount: Double
-    let percent: Double
-    let subtitle: String
-}
+
 
 struct EmptyBody: Encodable { }
 
@@ -49,10 +66,13 @@ struct ExchangeTokenRequest: Encodable {
 
 // MARK: - Direct Responses
 
+/// This REPLACES the old `AISuggestionResponse`.
+/// The backend returns a dictionary where keys are category names.
+/// e.g., { "Food & Dining": { ... } }
 struct AISuggestionResponse: Decodable {
-    /// Dynamic category keys (e.g., "Food", "Transportation") map to typed values.
-    let suggestion: [String: CategoryBudget]
+    let suggestion: [String: BudgetPlanItem]
 }
+
 
 struct TransactionsResponse: Decodable {
     let transactions: [Transaction]
@@ -70,8 +90,10 @@ struct GenericSuccessResponse: Decodable {
     let success: Bool
 }
 
-struct LoadBudgetResponse: Decodable {
-    let budgetPlan: [String: CategoryBudget]
+/// This REPLACES the old `LoadBudgetResponse`.
+/// It's the response from the `GET /budget` endpoint.
+struct LoadBudgetPlanResponse: Decodable {
+    let budgetPlan: [String: BudgetPlanItem]
     let totalBudget: Int
 }
 

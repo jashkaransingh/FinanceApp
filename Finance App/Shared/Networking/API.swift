@@ -20,6 +20,7 @@ enum API {
     case aiSummary
     case aiReallocate
     case budget
+    case aiFrequentMerchants
     
     /// Full URL for the endpoint
     var url: URL {
@@ -41,6 +42,8 @@ enum API {
             path = "/ai/reallocate"
         case .budget:
             path = "/budget"
+        case .aiFrequentMerchants:
+            path = "/ai/frequent_merchants"
             
         }
         return URL(string: API.host + path)!
