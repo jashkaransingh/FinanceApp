@@ -9,7 +9,7 @@ def get_transactions(uid: str, start_date: date, end_date: date) -> list:
     """
     (This function remains unchanged from before. It's used by your iOS app.)
     """
-    print(f"🔄 Service: Getting transactions for user {uid} from {start_date} to {end_date}")
+    print(f" Service: Getting transactions for user {uid} from {start_date} to {end_date}")
     db = firestore.client()
     transactions_ref = db.collection('users').document(uid).collection('transactions')
 
@@ -19,10 +19,10 @@ def get_transactions(uid: str, start_date: date, end_date: date) -> list:
     firestore_transactions = [doc.to_dict() for doc in docs]
 
     if firestore_transactions:
-        print(f"✅ Service: Found {len(firestore_transactions)} transactions in Firestore.")
+        print(f" Service: Found {len(firestore_transactions)} transactions in Firestore.")
         return firestore_transactions
 
-    print(f"⚠️ Service: No transactions in Firestore for this range. Fetching from Plaid API.")
+    print(f" Service: No transactions in Firestore for this range. Fetching from Plaid API.")
     # Fallback to Plaid API
     return sync_transactions_for_item(uid, start_date, end_date)
 
@@ -66,7 +66,7 @@ def sync_transactions_for_item(uid: str, start_date: date = None, end_date: date
             batch.set(doc_ref, tx_data, merge=True) # Use merge=True to be safe
         
         batch.commit()
-        print(f"✅ Service: Synced and saved {len(plaid_transactions)} transactions to Firestore for user {uid}")
+        print(f" Service: Synced and saved {len(plaid_transactions)} transactions to Firestore for user {uid}")
         update_account_summaries(uid)
 
         # Re-format the data for the client if needed
@@ -89,7 +89,7 @@ def update_account_summaries(uid):
     back to the main user document. This should be called after any
     transaction sync.
     """
-    print(f"🔥 Triggering summary update for user: {uid}")
+    print(f" Triggering summary update for user: {uid}")
     db = firestore.client()
     
     # 1. Define the date ranges needed for calculation.
@@ -145,4 +145,4 @@ def update_account_summaries(uid):
     user_ref = db.collection('users').document(uid)
     user_ref.update({"accountSummaries": summary_payload})
     
-    print(f"✅ Successfully updated summaries for user: {uid}")
+    print(f" Successfully updated summaries for user: {uid}")

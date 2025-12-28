@@ -21,3 +21,5 @@ else:
 
 # AI Configuration
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+REQUIRE_EMAIL_VERIFIED = False  # IMPORTANT: set True before production

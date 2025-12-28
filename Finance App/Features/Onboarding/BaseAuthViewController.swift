@@ -12,27 +12,28 @@ import AuthenticationServices
 import GoogleSignIn
 import CryptoKit
 import FirebaseCore
-import Network
 
-// MARK: - BaseAuthViewController
 class BaseAuthViewController: UIViewController, UITextFieldDelegate {
     
-    // MARK: - Properties
-    fileprivate var currentNonce: String?
-    private var originalButtonTitle: String?
-    
-    // To be configured by subclasses
+    // MARK: - Subclass configuration
+    // Subclasses must set these in viewDidLoad before BaseAuth needs them.
     var primaryButton: PrimaryButton!
     var textFields: [AuthTextField] = []
+    var loadingControls: [UIControl] = []
+    private(set) var isLoading: Bool = false
     
-    // MARK: - Common UI Components
-    let backgroundImageView: UIImageView = {
-        let imageView = UIImageView()
-        imageView.image = UIImage(named: "marble_background")
-        imageView.contentMode = .scaleAspectFill
-        return imageView
-    }()
     
+    // MARK: - Private state
+    fileprivate var currentNonce: String?
+    private var originalButtonTitle: String?
+    private var keyboardDidHideObserver: NSObjectProtocol?
+    private let separatorHeight: CGFloat = 20
+    private let socialButtonsHeight: CGFloat = 50
+    private var separatorHeightConstraint: NSLayoutConstraint!
+    private var socialButtonsHeightConstraint: NSLayoutConstraint!
+    
+    
+    // MARK: - UI
     let titleLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.preferredFont(forTextStyle: .largeTitle)
@@ -50,22 +51,6 @@ class BaseAuthViewController: UIViewController, UITextFieldDelegate {
         return label
     }()
     
-    let glassCard: UIView = {
-        let view = UIView()
-        view.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.6)
-        view.layer.cornerRadius = 24
-        view.clipsToBounds = true
-        
-        let blurEffect = UIBlurEffect(style: .light)
-        let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
-        blurView.frame = view.bounds
-        blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        view.addSubview(blurView)
-        return view
-    }()
-    
-    // StackView to hold form elements (email, password, buttons)
-    // Subclasses will add their specific views to this stack.
     let formStackView: UIStackView = {
         let stackView = UIStackView()
         stackView.axis = .vertical
@@ -73,14 +58,19 @@ class BaseAuthViewController: UIViewController, UITextFieldDelegate {
         return stackView
     }()
     
-    private let separatorLabel: UILabel = {
-        let label = UILabel()
-        label.text = "or"
-        label.font = .systemFont(ofSize: 12)
-        label.textColor = .secondaryLabel
-        label.textAlignment = .center
-        return label
+    private let separatorView = SeparatorView()
+    
+    private lazy var socialButtonsStack: UIStackView = {
+        let stack = UIStackView(arrangedSubviews: [appleSignInButton, googleSignInButton])
+        stack.spacing = 12
+        stack.distribution = .fillEqually
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        return stack
     }()
+    
+    lazy var appleSignInButton = createSocialButton(logo: UIImage(systemName: "apple.logo"))
+    lazy var googleSignInButton = createSocialButton(logo: UIImage(named: "google_logo"))
+    
     private let offlineBanner: UILabel = {
         let lbl = UILabel()
         lbl.backgroundColor = .systemRed
@@ -89,39 +79,173 @@ class BaseAuthViewController: UIViewController, UITextFieldDelegate {
         lbl.text = "You’re Offline"
         lbl.font = UIFont.preferredFont(forTextStyle: .caption1)
         lbl.adjustsFontForContentSizeCategory = true
-        lbl.isHidden = true   // start hidden
+        lbl.isHidden = true
         return lbl
     }()
-    private let pathMonitor = NWPathMonitor()
-    private let monitorQueue = DispatchQueue(label: "OfflineBannerMonitor")
-    
-    lazy var appleSignInButton = createSocialButton(logo: UIImage(systemName: "apple.logo"))
-    lazy var googleSignInButton = createSocialButton(logo: UIImage(named: "google_logo"))
     
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        // MARK: — Keyboard Dismissal
-        let tap = UITapGestureRecognizer(
-            target: self,
-            action: #selector(handleTapOutside))
-        tap.cancelsTouchesInView = false      // so buttons still work
-        tap.delegate = self
-        view.addGestureRecognizer(tap)
-        setupCommonUI()
-        setupCommonConstraints()
+        
+        navigationItem.largeTitleDisplayMode = .never
+        view.backgroundColor = .systemBackground
+        
+        setupKeyboardDismissal()
+        setupLayout()
         setupSocialButtonTargets()
-        setupOfflineBanner()
+        bindOfflineBanner()
     }
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        // wire up Next/Done
+        
         configureTextFieldNavigation()
-        // Autofocus
-        textFields.first?.textField.becomeFirstResponder()
+        
+        // Don’t steal focus if something is presented (alerts, sheets)
+        guard presentedViewController == nil else { return }
+        // Don’t refocus if a field is already focused
+        guard view.findFirstResponder() == nil else { return }
+        
+        focusFirstFieldWhenSafe()
     }
     
+    deinit {
+        if let obs = keyboardDidHideObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
+    }
+    
+    // MARK: - Layout
+    private func setupLayout() {
+        [offlineBanner, titleLabel, subtitleLabel, formStackView, separatorView, socialButtonsStack].forEach {
+            view.addSubview($0)
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+        separatorHeightConstraint = separatorView.heightAnchor.constraint(equalToConstant: separatorHeight)
+        socialButtonsHeightConstraint = socialButtonsStack.heightAnchor.constraint(equalToConstant: socialButtonsHeight)
+        
+        NSLayoutConstraint.activate([
+            offlineBanner.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            offlineBanner.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            offlineBanner.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            offlineBanner.heightAnchor.constraint(equalToConstant: 30),
+            
+            titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            titleLabel.topAnchor.constraint(equalTo: offlineBanner.bottomAnchor, constant: 24),
+            
+            subtitleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
+            
+            formStackView.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 24),
+            formStackView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            formStackView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            
+            separatorView.topAnchor.constraint(equalTo: formStackView.bottomAnchor, constant: 20),
+            separatorView.leadingAnchor.constraint(equalTo: formStackView.leadingAnchor),
+            separatorView.trailingAnchor.constraint(equalTo: formStackView.trailingAnchor),
+            separatorHeightConstraint,
+            
+            socialButtonsStack.topAnchor.constraint(equalTo: separatorView.bottomAnchor, constant: 16),
+            socialButtonsStack.leadingAnchor.constraint(equalTo: formStackView.leadingAnchor),
+            socialButtonsStack.trailingAnchor.constraint(equalTo: formStackView.trailingAnchor),
+            socialButtonsHeightConstraint,
+        ])
+    }
+    func setSocialSectionHidden(_ hidden: Bool) {
+        separatorView.isHidden = hidden
+        socialButtonsStack.isHidden = hidden
+        separatorHeightConstraint.constant = hidden ? 0 : separatorHeight
+        socialButtonsHeightConstraint.constant = hidden ? 0 : socialButtonsHeight
+    }
+    
+    
+    // MARK: - Offline banner binding
+    private func bindOfflineBanner() {
+        // Initial state
+        offlineBanner.isHidden = NetworkMonitor.shared.isConnected
+        
+        // Live updates
+        NetworkMonitor.shared.onStatusChange = { [weak self] isConnected in
+            self?.offlineBanner.isHidden = isConnected
+        }
+    }
+    @discardableResult
+    func guardOnlineOrAlert() -> Bool {
+        if NetworkMonitor.shared.isConnected { return true }
+        presentAlert(title: "No Internet Connection",
+                     message: "Please check your network and try again.")
+        return false
+    }
+    
+    
+    // MARK: - Keyboard + navigation helpers
+    private func setupKeyboardDismissal() {
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapOutside))
+        tap.cancelsTouchesInView = false
+        tap.delegate = self
+        view.addGestureRecognizer(tap)
+    }
+    
+    private func focusFirstFieldWhenSafe() {
+        guard view.window != nil else { return }
+        
+        let focus = { [weak self] in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                self.textFields.first?.textField.becomeFirstResponder()
+            }
+        }
+        
+        if let tc = transitionCoordinator {
+            tc.animate(alongsideTransition: nil) { _ in focus() }
+        } else {
+            focus()
+        }
+    }
+    
+    func pushSmoothly(_ vc: UIViewController) {
+        keyboardSafeTransition {
+            self.navigationController?.pushViewController(vc, animated: true)
+        }
+    }
+    
+    func popSmoothly() {
+        keyboardSafeTransition {
+            self.navigationController?.popViewController(animated: true)
+        }
+    }
+    
+    private func keyboardSafeTransition(_ action: @escaping () -> Void) {
+        if view.findFirstResponder() != nil {
+            view.endEditing(true)
+            
+            var didRun = false
+            let runOnce: () -> Void = {
+                guard !didRun else { return }
+                didRun = true
+                if let obs = self.keyboardDidHideObserver {
+                    NotificationCenter.default.removeObserver(obs)
+                    self.keyboardDidHideObserver = nil
+                }
+                action()
+            }
+            
+            keyboardDidHideObserver = NotificationCenter.default.addObserver(
+                forName: UIResponder.keyboardDidHideNotification,
+                object: nil,
+                queue: .main
+            ) { _ in
+                runOnce()
+            }
+            
+            // Fallback so we never get stuck if notification doesn’t fire
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                runOnce()
+            }
+        } else {
+            action()
+        }
+    }
     
     private func configureTextFieldNavigation() {
         for (idx, authTF) in textFields.enumerated() {
@@ -131,123 +255,99 @@ class BaseAuthViewController: UIViewController, UITextFieldDelegate {
         }
     }
     
-    // MARK: - Common Setup
-    private func setupCommonUI() {
-        view.addSubview(backgroundImageView)
-        view.addSubview(titleLabel)
-        view.addSubview(subtitleLabel)
-        view.addSubview(glassCard)
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        guard let index = textFields.firstIndex(where: { $0.textField === textField }) else {
+            textField.resignFirstResponder()
+            return true
+        }
         
-        guard let cardContentView = (glassCard.subviews.first as? UIVisualEffectView)?.contentView else { return }
-        
-        let socialButtonsStack = UIStackView(arrangedSubviews: [appleSignInButton, googleSignInButton])
-        socialButtonsStack.spacing = 12
-        socialButtonsStack.distribution = .fillEqually
-        
-        cardContentView.addSubview(formStackView)
-        cardContentView.addSubview(separatorLabel)
-        cardContentView.addSubview(socialButtonsStack)
-        
-        [backgroundImageView, titleLabel, subtitleLabel, glassCard, formStackView, separatorLabel, socialButtonsStack].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
+        let nextIndex = index + 1
+        if nextIndex < textFields.count {
+            textFields[nextIndex].textField.becomeFirstResponder()
+        } else {
+            textField.resignFirstResponder()
+            primaryButton?.sendActions(for: .touchUpInside)
+        }
+        return true
+    }
+    
+    @objc private func handleTapOutside() {
+        view.endEditing(true)
+    }
+    
+    // MARK: - Loading + alerts
+    func setLoading(_ loading: Bool) {
+        isLoading = loading
+        DispatchQueue.main.async {
+            if self.originalButtonTitle == nil {
+                self.originalButtonTitle = self.primaryButton?.title(for: .normal)
+            }
+            
+            let titleToShow = loading ? "Loading..." : (self.originalButtonTitle ?? "")
+            self.primaryButton?.setTitle(titleToShow, for: .normal)
+            
+            self.primaryButton?.isEnabled = !loading
+            self.appleSignInButton.isEnabled = !loading
+            self.googleSignInButton.isEnabled = !loading
+            self.textFields.forEach { $0.isUserInteractionEnabled = !loading }
+            self.loadingControls.forEach { $0.isEnabled = !loading }
         }
     }
     
-    private func setupCommonConstraints() {
-        guard let socialButtonsStack = googleSignInButton.superview else { return }
-        
-        NSLayoutConstraint.activate([
-            backgroundImageView.topAnchor.constraint(equalTo: view.topAnchor),
-            backgroundImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            backgroundImageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            backgroundImageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
-            titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            titleLabel.bottomAnchor.constraint(equalTo: subtitleLabel.topAnchor, constant: -8),
-            
-            subtitleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            subtitleLabel.bottomAnchor.constraint(equalTo: glassCard.topAnchor, constant: -24),
-            
-            glassCard.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            glassCard.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            glassCard.centerYAnchor.constraint(equalTo: view.safeAreaLayoutGuide.centerYAnchor),
-            
-            // --- Constraints inside the card ---
-            formStackView.topAnchor.constraint(equalTo: glassCard.topAnchor, constant: 24),
-            formStackView.leadingAnchor.constraint(equalTo: glassCard.leadingAnchor, constant: 20),
-            formStackView.trailingAnchor.constraint(equalTo: glassCard.trailingAnchor, constant: -20),
-            
-            separatorLabel.topAnchor.constraint(equalTo: formStackView.bottomAnchor, constant: 20),
-            separatorLabel.leadingAnchor.constraint(equalTo: formStackView.leadingAnchor),
-            separatorLabel.trailingAnchor.constraint(equalTo: formStackView.trailingAnchor),
-            
-            socialButtonsStack.topAnchor.constraint(equalTo: separatorLabel.bottomAnchor, constant: 16),
-            socialButtonsStack.leadingAnchor.constraint(equalTo: formStackView.leadingAnchor),
-            socialButtonsStack.trailingAnchor.constraint(equalTo: formStackView.trailingAnchor),
-            socialButtonsStack.heightAnchor.constraint(equalToConstant: 50),
-            socialButtonsStack.bottomAnchor.constraint(equalTo: glassCard.bottomAnchor, constant: -24)
-        ])
+    func presentAlert(title: String, message: String) {
+        DispatchQueue.main.async {
+            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+            alert.addAction(.init(title: "OK", style: .default))
+            self.present(alert, animated: true)
+        }
     }
     
+    // MARK: - Social Sign-In
     private func setupSocialButtonTargets() {
         appleSignInButton.addTarget(self, action: #selector(handleAppleSignIn), for: .touchUpInside)
         googleSignInButton.addTarget(self, action: #selector(handleGoogleSignIn), for: .touchUpInside)
     }
-    private func setupOfflineBanner() {
-        // 1) Add banner above everything else
-        view.addSubview(offlineBanner)
-        offlineBanner.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            offlineBanner.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            offlineBanner.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            offlineBanner.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            offlineBanner.heightAnchor.constraint(equalToConstant: 30)
-        ])
-        
-        // 2) Watch for network changes
-        pathMonitor.pathUpdateHandler = { [weak self] path in
-            DispatchQueue.main.async {
-                // Show banner if no connection, hide if connected
-                self?.offlineBanner.isHidden = (path.status == .satisfied)
-            }
-        }
-        pathMonitor.start(queue: monitorQueue)
+    
+    private func createSocialButton(logo: UIImage?) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setImage(logo, for: .normal)
+        button.tintColor = .label
+        button.backgroundColor = .secondarySystemBackground
+        button.layer.cornerRadius = 14
+        button.imageView?.contentMode = .scaleAspectFit
+        button.imageEdgeInsets = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        return button
     }
     
-    
-    // MARK: - Social Sign-In Actions
     @objc private func handleAppleSignIn() {
         setLoading(true)
-        // Attempt to generate a secure nonce
+        
         guard let nonce = randomNonceString() else {
             setLoading(false)
-            presentAlert(
-                title: "Sign-In Error",
-                message: "Unable to start Apple sign-in. Please try again."
-            )
+            presentAlert(title: "Sign-In Error", message: "Unable to start Apple sign-in. Please try again.")
             return
         }
+        
         currentNonce = nonce
-        let appleIDProvider = ASAuthorizationAppleIDProvider()
-        let request = appleIDProvider.createRequest()
+        
+        let provider = ASAuthorizationAppleIDProvider()
+        let request = provider.createRequest()
         request.requestedScopes = [.fullName, .email]
         request.nonce = sha256(nonce)
         
-        let authorizationController = ASAuthorizationController(authorizationRequests: [request])
-        authorizationController.delegate = self
-        authorizationController.presentationContextProvider = self
-        authorizationController.performRequests()
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        controller.performRequests()
     }
     
     @objc private func handleGoogleSignIn() {
-        // Show loading state immediately
         setLoading(true)
         
-        // Kick off Google Sign-In
         GIDSignIn.sharedInstance.signIn(withPresenting: self) { [weak self] signInResult, error in
-            guard let self = self else { return }
+            guard let self else { return }
             
-            if let error = error {
+            if let error {
                 self.setLoading(false)
                 self.presentAlert(title: "Google Sign-In Failed", message: error.localizedDescription)
                 return
@@ -258,25 +358,22 @@ class BaseAuthViewController: UIViewController, UITextFieldDelegate {
                 let idToken = result.user.idToken?.tokenString
             else {
                 self.setLoading(false)
-                self.presentAlert(title: "Google Sign-In Failed",
-                                  message: "Could not retrieve Google ID token.")
+                self.presentAlert(title: "Google Sign-In Failed", message: "Could not retrieve Google ID token.")
                 return
             }
             
-            // Now hand off to your AuthService
             AuthService.signInWithGoogle(idToken: idToken) { [weak self] result in
-                guard let self = self else { return }
+                guard let self else { return }
                 self.setLoading(false)
                 
                 switch result {
                 case .success:
                     SceneDelegate.switchToMainApp()
-                    
                 case .failure(let err):
                     let msg: String
                     switch err {
                     case .networkError:
-                        msg = "No internet – please try again."
+                        msg = "No internet. Please try again."
                     default:
                         msg = err.localizedDescription
                     }
@@ -286,67 +383,17 @@ class BaseAuthViewController: UIViewController, UITextFieldDelegate {
         }
     }
     
-    @objc private func handleTapOutside() {
-        view.endEditing(true)
-    }
-    
-    // MARK: - Helpers
-    func setLoading(_ loading: Bool) {
-        DispatchQueue.main.async {
-            // 1) Capture the button’s title the *first* time we go into loading
-            if self.originalButtonTitle == nil {
-                self.originalButtonTitle = self.primaryButton?.title(for: .normal)
-            }
-            
-            // 2) Decide which title to show
-            let titleToShow = loading
-            ? "Loading..."
-            : (self.originalButtonTitle ?? "")
-            
-            // 3) Apply the title and enable/disable
-            self.primaryButton?.setTitle(titleToShow, for: .normal)
-            self.primaryButton?.isEnabled = !loading
-            self.appleSignInButton.isEnabled = !loading
-            self.googleSignInButton.isEnabled = !loading
-            self.textFields.forEach { $0.isUserInteractionEnabled = !loading }
-        }
-    }
-    
-    
-    func presentAlert(title: String, message: String) {
-        DispatchQueue.main.async {
-            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-            alert.addAction(.init(title: "OK", style: .default))
-            self.present(alert, animated: true)
-        }
-    }
-    
-    private func createSocialButton(logo: UIImage?) -> UIButton {
-        let button = UIButton(type: .system)
-        button.setImage(logo, for: .normal)
-        button.tintColor = .label
-        button.backgroundColor = .white.withAlphaComponent(0.8)
-        button.layer.cornerRadius = 14
-        button.imageView?.contentMode = .scaleAspectFit
-        button.imageEdgeInsets = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
-        return button
-    }
-    
-    // MARK: - Crypto Helpers
+    // MARK: - Crypto helpers
     private func randomNonceString(length: Int = 32) -> String? {
         precondition(length > 0)
-        let charset: [Character] =
-        Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        let charset = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
         var result = ""
         var remainingLength = length
         
         while remainingLength > 0 {
             var random: UInt8 = 0
             let errorCode = SecRandomCopyBytes(kSecRandomDefault, 1, &random)
-            if errorCode != errSecSuccess {
-                // Failed to generate secure random byte
-                return nil
-            }
+            if errorCode != errSecSuccess { return nil }
             if random < charset.count {
                 result.append(charset[Int(random)])
                 remainingLength -= 1
@@ -355,7 +402,6 @@ class BaseAuthViewController: UIViewController, UITextFieldDelegate {
         return result
     }
     
-    
     private func sha256(_ input: String) -> String {
         let inputData = Data(input.utf8)
         let hashedData = SHA256.hash(data: inputData)
@@ -363,68 +409,42 @@ class BaseAuthViewController: UIViewController, UITextFieldDelegate {
     }
 }
 
-// MARK: - Apple Sign-In Delegate
+// MARK: - Apple Sign-In delegates
 extension BaseAuthViewController: ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        // Safely unwrap the hosting window for the sign-in sheet.
-        if let window = self.view.window {
-            return window
-        }
-        // Fallback to key window if for some reason view.window is nil
+        if let window = view.window { return window }
         return UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .flatMap { $0.windows }
-            .first(where: { $0.isKeyWindow })
-        ?? UIWindow()
+            .first(where: { $0.isKeyWindow }) ?? UIWindow()
     }
     
-    func authorizationController(
-        controller: ASAuthorizationController,
-        didCompleteWithAuthorization authorization: ASAuthorization
-    ) {
-        guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
-              let nonce = currentNonce else {
-            presentAlert(
-                title: "Sign-In Error",
-                message: "Invalid Apple Sign-In state."
-            )
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard
+            let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
+            let nonce = currentNonce
+        else {
+            presentAlert(title: "Sign-In Error", message: "Invalid Apple Sign-In state.")
             return
         }
         
-        // Show loading state
         setLoading(true)
         
-        guard
-            let appleIDToken = appleIDCredential.identityToken,
-            let idTokenString = String(data: appleIDToken, encoding: .utf8)
-        else {
-            setLoading(false)
-            presentAlert(
-                title: "Sign-In Error",
-                message: "Could not verify Apple credentials. Please try again."
-            )
-            return
-        }
-        
-        AuthService.signInWithApple(
-            credential: appleIDCredential,
-            nonce: nonce
-        ) { [weak self] result in
+        AuthService.signInWithApple(credential: appleIDCredential, nonce: nonce) { [weak self] result in
+            guard let self else { return }
             DispatchQueue.main.async {
-                guard let self = self else { return }
-                // Stop loading & clear nonce
                 self.setLoading(false)
                 self.currentNonce = nil
                 
                 switch result {
                 case .success:
                     SceneDelegate.switchToMainApp()
-                    
                 case .failure(let err):
                     let msg: String
                     switch err {
                     case .networkError:
-                        msg = "No internet – please try again."
+                        msg = "No internet. Please try again."
                     case .userNotFound:
                         msg = "No account found for this Apple ID."
                     default:
@@ -436,40 +456,26 @@ extension BaseAuthViewController: ASAuthorizationControllerDelegate, ASAuthoriza
         }
     }
     
-    
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        print("Sign in with Apple failed: \(error.localizedDescription)")
         setLoading(false)
         currentNonce = nil
         presentAlert(title: "Apple Sign-In Failed", message: error.localizedDescription)
-    }
-    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        guard let index = textFields.firstIndex(where: { $0.textField === textField }) else {
-            textField.resignFirstResponder()
-            return true
-        }
-        
-        let nextIndex = index + 1
-        if nextIndex < textFields.count {
-            // Move to the next field
-            textFields[nextIndex].textField.becomeFirstResponder()
-        } else {
-            // Last field: dismiss keyboard and trigger the primary action
-            textField.resignFirstResponder()
-            primaryButton?.sendActions(for: .touchUpInside)
-        }
-        return true
     }
 }
 
 extension BaseAuthViewController: UIGestureRecognizerDelegate {
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-        // We check if the view that was tapped has the identifier we set.
-        if touch.view?.accessibilityIdentifier == "passwordVisibilityToggle" {
-            // If it's our button, don't let the main tap gesture fire.
-            return false
-        }
-        // For all other views, let the gesture fire as normal.
+        if touch.view?.accessibilityIdentifier == "passwordVisibilityToggle" { return false }
         return true
+    }
+}
+
+extension UIView {
+    func findFirstResponder() -> UIView? {
+        if isFirstResponder { return self }
+        for sub in subviews {
+            if let fr = sub.findFirstResponder() { return fr }
+        }
+        return nil
     }
 }

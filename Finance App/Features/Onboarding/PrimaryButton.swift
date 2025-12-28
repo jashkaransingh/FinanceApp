@@ -37,5 +37,14 @@ final class PrimaryButton: UIButton {
             setTitleColor(isEnabled ? enabledTitleColor : disabledTitleColor, for: .normal)
         }
     }
+    
+    override var isHighlighted: Bool {
+        didSet {
+            UIView.animate(withDuration: 0.2, delay: 0, options: [.beginFromCurrentState, .curveEaseOut]) {
+                self.transform = self.isHighlighted ? .init(scaleX: 0.95, y: 0.95) : .identity
+            }
+        }
+    }
 }
+
 

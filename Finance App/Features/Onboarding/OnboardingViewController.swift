@@ -14,7 +14,7 @@ final class OnboardingViewController: UIPageViewController {
     
     private var pages = [UIViewController]()
     private let pageControl = UIPageControl()
-    private let nextButton = InteractiveButton(type: .system)
+    private let nextButton = PrimaryButton(title: "Next")
     private var isAdvancing = false
     
     // This is where we define the content for our 3 pages

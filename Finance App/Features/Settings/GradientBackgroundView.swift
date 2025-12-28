@@ -15,7 +15,7 @@ final class GradientBackgroundView: UIView {
     init() {
         super.init(frame: .zero)
         setupGradient()
-        startAnimation()
+//        startAnimation()
     }
     
     required init?(coder: NSCoder) {

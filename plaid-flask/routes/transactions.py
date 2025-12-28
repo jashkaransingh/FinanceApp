@@ -1,6 +1,8 @@
+from firebase import verify_auth_header, Unauthorized, EmailNotVerified
 from flask import Blueprint, jsonify, request
 from datetime import date, timedelta
 import traceback
+import config
 from firebase_admin import auth, firestore
 from plaid_client import fetch_all_transactions
 from services.transaction_service import sync_transactions_for_item
@@ -32,9 +34,7 @@ def get_transactions():
     A thin API wrapper that calls the transaction sync service.
     """
     try:
-        id_token = request.headers.get('Authorization').split('Bearer ')[1]
-        decoded_token = auth.verify_id_token(id_token)
-        uid = decoded_token['uid']
+        uid, _ = verify_auth_header(request.headers.get("Authorization"), require_email_verified=config.REQUIRE_EMAIL_VERIFIED)
         
         start_str = request.args.get("start_date")
         end_str   = request.args.get("end_date")
@@ -46,6 +46,10 @@ def get_transactions():
         
         return jsonify(transactions=client_transactions)
 
+    except EmailNotVerified:
+        return jsonify(error="EMAIL_NOT_VERIFIED"), 403
+    except Unauthorized:
+        return jsonify(error="UNAUTHORIZED"), 401
     except Exception as e:
         traceback.print_exc()
         return jsonify(error=str(e)), 500

@@ -80,6 +80,7 @@ final class ProfileSettingsViewController: UITableViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationItem.largeTitleDisplayMode = .always
+        navigationController?.setNavigationBarHidden(false, animated: animated)
     }
     
     
@@ -144,14 +145,10 @@ final class ProfileSettingsViewController: UITableViewController {
         // Handlers
         formView.onChangePassword = { [weak self] in
             guard let self = self else { return }
-            let vc = ResetPasswordViewController()
-            
-            // Pre-fill email if we have it
+
             let emailFromForm = self.formView.email
-            vc.prefillEmail = emailFromForm.isEmpty
-            ? Auth.auth().currentUser?.email
-            : emailFromForm
-            
+            let prefill = emailFromForm.isEmpty ? Auth.auth().currentUser?.email : emailFromForm
+            let vc = ResetPasswordViewController(mode: .inApp, prefillEmail: prefill)
             self.navigationController?.pushViewController(vc, animated: true)
         }
     }

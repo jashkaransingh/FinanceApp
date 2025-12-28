@@ -10,7 +10,7 @@ import StoreKit
 import MessageUI
 
 final class VersionInfoViewController: UIViewController, MFMailComposeViewControllerDelegate {
-
+    
     // MARK: - Config
     private let appStoreID: String? = nil
     private let supportEmail = "support@example.com"
@@ -20,7 +20,7 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
     private let releaseNotes: [String] = [
         "Initial release — budgets, expense tracking, and reminders."
     ]
-
+    
     // MARK: - Derived
     private var appName: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
@@ -30,7 +30,7 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
     private var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
     }
-
+    
     // MARK: - UI
     private let card: UIView = {
         let v = UIView()
@@ -42,7 +42,7 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
         v.directionalLayoutMargins = .init(top: 20, leading: 20, bottom: 18, trailing: 20)
         return v
     }()
-
+    
     private let stack: UIStackView = {
         let s = UIStackView()
         s.axis = .vertical
@@ -51,7 +51,7 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
         s.translatesAutoresizingMaskIntoConstraints = false
         return s
     }()
-
+    
     // Hero
     private let iconContainer: UIView = {
         let v = UIView()
@@ -72,7 +72,7 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
         iv.translatesAutoresizingMaskIntoConstraints = false
         return iv
     }()
-
+    
     private lazy var nameLabel: UILabel = {
         let l = UILabel()
         l.textAlignment = .center
@@ -116,7 +116,7 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
         l.text = "© \(year) \(companyName) • All rights reserved."
         return l
     }()
-
+    
     // Tiles
     private lazy var tilesRow: UIStackView = {
         let h = UIStackView(arrangedSubviews: [rateTile, supportTile])
@@ -129,33 +129,33 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
     }()
     private lazy var rateTile: UIButton    = makeTile(title: "Rate this App",   symbol: "star.fill",     action: #selector(rateApp))
     private lazy var supportTile: UIButton = makeTile(title: "Contact Support", symbol: "envelope.fill", action: #selector(contactSupport))
-
+    
     // MARK: - Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
         buildUI()
         configureIcon()
-
+        
         // Styled title
         nameLabel.attributedText = styledAppName(appName)
         versionLabel.text = "Version \(version)"
         taglineLabel.text = tagline
-
+        
         // Bullets
         bulletsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         releaseNotes.forEach { bulletsStack.addArrangedSubview(makeBulletRow($0)) }
     }
-
+    
     private func buildUI() {
         view.addSubview(card)
         NSLayoutConstraint.activate([
             card.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
             card.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
             card.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
-            card.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20)
+            card.bottomAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20)
         ])
-
+        
         card.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: card.layoutMarginsGuide.topAnchor),
@@ -163,7 +163,7 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
             stack.trailingAnchor.constraint(equalTo: card.layoutMarginsGuide.trailingAnchor),
             stack.bottomAnchor.constraint(equalTo: card.layoutMarginsGuide.bottomAnchor)
         ])
-
+        
         let iconWrap = UIView()
         iconWrap.translatesAutoresizingMaskIntoConstraints = false
         iconWrap.addSubview(iconContainer)
@@ -172,13 +172,13 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
             iconContainer.centerXAnchor.constraint(equalTo: iconWrap.centerXAnchor),
             iconContainer.topAnchor.constraint(equalTo: iconWrap.topAnchor),
             iconContainer.bottomAnchor.constraint(equalTo: iconWrap.bottomAnchor),
-
+            
             iconView.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
             iconView.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
             iconView.widthAnchor.constraint(equalTo: iconContainer.widthAnchor, multiplier: 0.62),
             iconView.heightAnchor.constraint(equalTo: iconContainer.heightAnchor, multiplier: 0.62)
         ])
-
+        
         stack.addArrangedSubview(iconWrap)
         stack.addArrangedSubview(nameLabel)
         stack.addArrangedSubview(versionLabel)
@@ -186,7 +186,7 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
         stack.addArrangedSubview(taglineLabel)
         stack.addArrangedSubview(tilesRow)
         stack.addArrangedSubview(footerLabel)
-
+        
         // Rhythm (tight + consistent)
         stack.setCustomSpacing(12, after: iconWrap)     // icon → name
         stack.setCustomSpacing(6,  after: nameLabel)    // name → version
@@ -195,7 +195,7 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
         stack.setCustomSpacing(14, after: taglineLabel) // tagline → tiles
         stack.setCustomSpacing(10, after: tilesRow)     // tiles → footer
     }
-
+    
     // MARK: - Icon
     private func configureIcon() {
         if let appIcon = primaryAppIcon() {
@@ -219,7 +219,7 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
         }
         return nil
     }
-
+    
     // MARK: - Tiles
     private func makeTile(title: String, symbol: String, action: Selector) -> UIButton {
         let b = UIButton(type: .system)
@@ -239,21 +239,26 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
         b.addTarget(self, action: action, for: .touchUpInside)
         return b
     }
-
+    
     // MARK: - Exact compact height
     func compactHeight(for sheetWidth: CGFloat) -> CGFloat {
-        let cardWidth = max(0, sheetWidth - 32)
+        view.bounds.size.width = sheetWidth
         view.setNeedsLayout()
         view.layoutIfNeeded()
+        
+        let m = view.layoutMargins
+        let cardWidth = max(0, sheetWidth - m.left - m.right)
+        
         let cardHeight = card.systemLayoutSizeFitting(
             CGSize(width: cardWidth, height: UIView.layoutFittingCompressedSize.height),
             withHorizontalFittingPriority: .required,
-            verticalFittingPriority: .required
+            verticalFittingPriority: .fittingSizeLevel
         ).height
-        let total = 20 + cardHeight + 20 + 16
-        return ceil(max(360, total))
+        
+        let total = 20 + cardHeight + 20
+        return ceil(total)
     }
-
+    
     // MARK: - Adapt tiles on appearance change
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
@@ -264,7 +269,7 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
             b.configuration = cfg
         }
     }
-
+    
     // MARK: - Actions
     @objc private func rateApp() {
         if let id = appStoreID,
@@ -276,14 +281,14 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
             else { SKStoreReviewController.requestReview() }
         }
     }
-
+    
     @objc private func contactSupport() {
         let subject = "[\(appName)] Support"
         let body = """
         Hi \(companyName),
-
+        
         (Tell us what went wrong or what you need help with.)
-
+        
         ––
         App: \(appName) \(version)
         Device: iOS \(UIDevice.current.systemVersion)
@@ -306,7 +311,7 @@ final class VersionInfoViewController: UIViewController, MFMailComposeViewContro
             if let url = comps.url { UIApplication.shared.open(url) }
         }
     }
-
+    
     func mailComposeController(_ controller: MFMailComposeViewController,
                                didFinishWith result: MFMailComposeResult,
                                error: Error?) {
@@ -320,25 +325,41 @@ extension VersionInfoViewController {
         let vc = VersionInfoViewController()
         vc.modalPresentationStyle = .pageSheet
         vc.loadViewIfNeeded()
-        vc.view.layoutIfNeeded()
-
+        
         if let sheet = vc.sheetPresentationController {
+            sheet.prefersGrabberVisible = false
+            
             if #available(iOS 16.0, *) {
-                let width = presenter.view.window?.bounds.width ?? presenter.view.bounds.width
+                let width = presenter.view.window?.bounds.width ?? UIScreen.main.bounds.width
+                
+                vc.loadViewIfNeeded()
+                vc.view.bounds.size.width = width
+                vc.view.setNeedsLayout()
+                vc.view.layoutIfNeeded()
+                
                 let h = vc.compactHeight(for: width)
                 let id = UISheetPresentationController.Detent.Identifier("fit")
-                let detent = UISheetPresentationController.Detent.custom(identifier: id) { _ in h }
+                
+                let detent = UISheetPresentationController.Detent.custom(identifier: id) { context in
+                    min(h, context.maximumDetentValue - 12)
+                }
+                
                 sheet.detents = [detent]
                 sheet.selectedDetentIdentifier = id
-                sheet.prefersGrabberVisible = false
-            } else if #available(iOS 15.0, *) {
+                
+                // Helps prevent “scroll to expand” behavior if Apple treats something as scrollable later
+                sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+            }else if #available(iOS 15.0, *) {
                 sheet.detents = [.medium()]
-                sheet.prefersGrabberVisible = false
+                sheet.selectedDetentIdentifier = .medium
             }
         }
+        
         presenter.present(vc, animated: true)
     }
 }
+
+
 
 // MARK: - Styling helpers
 private extension UIFont {
@@ -376,7 +397,7 @@ private func makeBulletRow(_ text: String) -> UIStackView {
     bullet.setContentHuggingPriority(.required, for: .horizontal)
     bullet.setContentCompressionResistancePriority(.required, for: .horizontal)
     bullet.widthAnchor.constraint(equalToConstant: 12).isActive = true
-
+    
     let body = UILabel()
     body.text = text
     body.numberOfLines = 0
@@ -385,7 +406,7 @@ private func makeBulletRow(_ text: String) -> UIStackView {
     body.font = .preferredFont(forTextStyle: .footnote)
     body.setContentCompressionResistancePriority(.required, for: .vertical)
     body.setContentHuggingPriority(.required, for: .vertical)
-
+    
     let row = UIStackView(arrangedSubviews: [bullet, body])
     row.axis = .horizontal
     row.alignment = .firstBaseline
@@ -400,6 +421,3 @@ private extension UIColor {
         }
     }
 }
-
-
-

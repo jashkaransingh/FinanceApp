@@ -1,3 +1,4 @@
+from firebase import db, verify_auth_header, Unauthorized, EmailNotVerified
 from flask import Blueprint, jsonify, request
 from plaid_client import plaid_client
 from plaid.model.link_token_create_request import LinkTokenCreateRequest
@@ -23,10 +24,8 @@ def create_link_token():
     """
     try:
         # 1. Verify the user's Firebase ID token from the request header.
-        id_token = request.headers.get('Authorization').split('Bearer ')[1]
-        decoded_token = auth.verify_id_token(id_token)
-        uid = decoded_token['uid']
-        print(f"✅ Verified user with UID: {uid}")
+        uid, _ = verify_auth_header(request.headers.get("Authorization"), require_email_verified=config.REQUIRE_EMAIL_VERIFIED)
+        print(f" Verified user with UID: {uid}")
 
         # 2. Create the Link Token request for Plaid.
         #    We now use the real user's UID for client_user_id.
@@ -43,6 +42,10 @@ def create_link_token():
         response = plaid_client.link_token_create(plaid_request)
         return jsonify(link_token=response['link_token'])
         
+    except EmailNotVerified:
+        return jsonify(error="EMAIL_NOT_VERIFIED"), 403
+    except Unauthorized:
+        return jsonify(error="UNAUTHORIZED"), 401
     except Exception as e:
         traceback.print_exc()
         return jsonify(error=str(e)), 500
@@ -58,10 +61,8 @@ def exchange_public_token():
     """
     try:
         # 1. Verify the user's Firebase ID token.
-        id_token = request.headers.get('Authorization').split('Bearer ')[1]
-        decoded_token = auth.verify_id_token(id_token)
-        uid = decoded_token['uid']
-        print(f"✅ Verified user for token exchange with UID: {uid}")
+        uid, _ = verify_auth_header(request.headers.get("Authorization"), require_email_verified=config.REQUIRE_EMAIL_VERIFIED)
+        print(f" Verified user for token exchange with UID: {uid}")
 
         # 2. Get the public_token from the request body.
         public_token = request.json.get("public_token")
@@ -75,7 +76,6 @@ def exchange_public_token():
         item_id = exchange_response['item_id'] # Plaid's ID for this linked item
 
         # 4. Save the new, secure token directly to the user's Firestore document.
-        db = firestore.client()
         user_ref = db.collection('users').document(uid)
         user_ref.update({
             'plaidAccessToken': access_token,
@@ -83,8 +83,12 @@ def exchange_public_token():
             'isBankConnected': True
         })
         
-        print(f"✅ Successfully saved access token for user {uid}")
+        print(f" Successfully saved access token for user {uid}")
         return jsonify(success=True)
+    except EmailNotVerified:
+        return jsonify(error="EMAIL_NOT_VERIFIED"), 403
+    except Unauthorized:
+        return jsonify(error="UNAUTHORIZED"), 401
     except Exception as e:
         traceback.print_exc()
         return jsonify(error=str(e)), 500
@@ -97,13 +101,10 @@ def remove_item():
     """
     try:
         # 1. Verify the user is legitimate via their Firebase ID token
-        id_token = request.headers.get('Authorization').split('Bearer ')[1]
-        decoded_token = auth.verify_id_token(id_token)
-        uid = decoded_token['uid']
-        print(f"✅ Verified user for item removal with UID: {uid}")
+        uid, _ = verify_auth_header(request.headers.get("Authorization"), require_email_verified=config.REQUIRE_EMAIL_VERIFIED)
+        print(f" Verified user for item removal with UID: {uid}")
         
         # 2. Get the user's access token from Firestore
-        db = firestore.client()
         user_ref = db.collection('users').document(uid)
         user_doc = user_ref.get()
 
@@ -131,11 +132,15 @@ def remove_item():
             'accountSummaries': firestore.DELETE_FIELD
         })
         
-        print(f"✅ Successfully removed Plaid item and cleaned up Firestore for user {uid}")
+        print(f" Successfully removed Plaid item and cleaned up Firestore for user {uid}")
         # The response object doesn't have a 'removed' key.
         # A simple success JSON is all that's needed. The 200 OK status is what the client checks.
         return jsonify(success=True)
 
+    except EmailNotVerified:
+        return jsonify(error="EMAIL_NOT_VERIFIED"), 403
+    except Unauthorized:
+        return jsonify(error="UNAUTHORIZED"), 401
     except Exception as e:
         traceback.print_exc()
         return jsonify(error=str(e)), 500

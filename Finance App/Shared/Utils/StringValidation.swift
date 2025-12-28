@@ -37,3 +37,9 @@ extension String {
     }
 
 }
+extension String {
+    var isValidSimpleName: Bool {
+        trimmingCharacters(in: .whitespacesAndNewlines).count >= 3
+    }
+}
+

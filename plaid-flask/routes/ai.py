@@ -252,13 +252,13 @@ def weekly_summary():
         id_token = request.headers.get('Authorization').split('Bearer ')[1]
         decoded_token = auth.verify_id_token(id_token)
         uid = decoded_token['uid']
-        print(f"✅ Verified user for AI summary: {uid}")
+        print(f" Verified user for AI summary: {uid}")
     except Exception as e:
         return jsonify(error="Invalid token.", details=str(e)), 401
     
     # 2. Parse request
     data = request.get_json(force=True)
-    print("▶️ [weekly_summary] raw request JSON:", data)
+    print("▶ [weekly_summary] raw request JSON:", data)
     
     transactions = data.get("transactions", [])
     total_budget = data.get("total_budget") or data.get("weekly_budget", 100)
@@ -291,7 +291,7 @@ def weekly_summary():
     # --- THIS IS THE NEW PROMPT LOGIC (Task 2a) ---
     if selected_merchants:
         # User selected specific merchants. Only use those.
-        print(f"✅ User selected {len(selected_merchants)} merchants.")
+        print(f" User selected {len(selected_merchants)} merchants.")
         for name in selected_merchants:
             if name in patterns:
                 info = patterns[name]

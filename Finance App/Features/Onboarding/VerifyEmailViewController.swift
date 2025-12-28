@@ -21,8 +21,8 @@ final class VerifyEmailViewController: BaseAuthViewController {
 
     private let checkButton = PrimaryButton(title: "I’ve Verified")
     private let resendButton = LinkButton(title: "Resend verification email")
+    private let useDifferentEmailButton = LinkButton(title: "Use a different email")
     private let email: String
-    private var isBusy = false
 
     // MARK: - Init
     init(email: String) {
@@ -41,6 +41,8 @@ final class VerifyEmailViewController: BaseAuthViewController {
         // BaseAuth wiring
         self.primaryButton = checkButton
         self.textFields = [] // none
+        loadingControls = [resendButton, useDifferentEmailButton]
+        setSocialSectionHidden(true)
 
         messageLabel.text = """
         We sent a verification link to:
@@ -54,19 +56,19 @@ final class VerifyEmailViewController: BaseAuthViewController {
         formStackView.addArrangedSubview(checkButton)
         formStackView.setCustomSpacing(12, after: checkButton)
         formStackView.addArrangedSubview(resendButton)
+        formStackView.addArrangedSubview(useDifferentEmailButton)
+
 
         checkButton.addTarget(self,  action: #selector(didTapCheck),  for: .touchUpInside)
         resendButton.addTarget(self, action: #selector(didTapResend), for: .touchUpInside)
+        useDifferentEmailButton.addTarget(self, action: #selector(didTapUseDifferentEmail), for: .touchUpInside)
     }
 
     // MARK: - Actions
     @objc private func didTapCheck() {
-        guard !isBusy else { return }
-        isBusy = true
-        checkButton.isEnabled = false
-        resendButton.isEnabled = false
-
+        guard !isLoading else { return }
         setLoading(true)
+
         guard let user = Auth.auth().currentUser else {
             onMain {
                 self.setLoading(false)
@@ -80,14 +82,12 @@ final class VerifyEmailViewController: BaseAuthViewController {
             guard let self = self else { return }
             onMain {
                 self.setLoading(false)
-                self.isBusy = false
-                self.checkButton.isEnabled = true
-                self.resendButton.isEnabled = true
-                
+
                 if let error = error {
                     self.handleReloadError(error)
                     return
                 }
+
                 if Auth.auth().currentUser?.isEmailVerified == true {
                     SharedDataManager.shared.reloadUserProfile { _ in
                         onMain { SceneDelegate.switchToMainApp() }
@@ -103,12 +103,9 @@ final class VerifyEmailViewController: BaseAuthViewController {
     }
 
     @objc private func didTapResend() {
-        guard !isBusy else { return }
-        isBusy = true
-        checkButton.isEnabled = false
-        resendButton.isEnabled = false
-        
+        guard !isLoading else { return }
         setLoading(true)
+
         guard Auth.auth().currentUser != nil else {
             onMain {
                 self.setLoading(false)
@@ -122,9 +119,6 @@ final class VerifyEmailViewController: BaseAuthViewController {
             guard let self = self else { return }
             onMain {
                 self.setLoading(false)
-                self.isBusy = false
-                    self.checkButton.isEnabled = true
-                    self.resendButton.isEnabled = true
                 switch result {
                 case .success:
                     self.presentAlert(title: "Email Sent",
@@ -136,6 +130,19 @@ final class VerifyEmailViewController: BaseAuthViewController {
             }
         }
     }
+    @objc private func didTapUseDifferentEmail() {
+        guard !isLoading else { return }
+
+        do {
+            try Auth.auth().signOut()
+        } catch {
+            presentAlert(title: "Couldn't Sign Out", message: error.localizedDescription)
+            return
+        }
+
+        SceneDelegate.switchToLogin()
+    }
+
 
     private static func errorMessage(for error: AuthService.AuthError) -> String {
         switch error {

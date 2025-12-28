@@ -292,7 +292,19 @@ final class LinkedAccountsViewController: UIViewController {
                 guard let self = self else { return }
                 switch result {
                 case .success:
-                    NotificationCenter.default.post(name: .bankAccountUnlinked, object: nil)
+                    guard let uid = Auth.auth().currentUser?.uid else {
+                        NotificationCenter.default.post(name: .bankAccountUnlinked, object: nil)
+                        return
+                    }
+
+                    let docRef = Firestore.firestore().collection("users").document(uid)
+                    docRef.setData([
+                        "isBankConnected": false,
+                        "bankName": FieldValue.delete(),
+                        "accountSummaries": FieldValue.delete()
+                    ], merge: true) { _ in
+                        NotificationCenter.default.post(name: .bankAccountUnlinked, object: nil)
+                    }
                 case .failure(let error):
                     let alert = UIAlertController(title: "Error", message: error.localizedDescription, preferredStyle: .alert)
                     alert.addAction(.init(title: "OK", style: .default))

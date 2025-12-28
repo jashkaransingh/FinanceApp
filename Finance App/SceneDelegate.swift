@@ -6,7 +6,9 @@
 //
 
 import UIKit
+import FirebaseAuth
 import GoogleSignIn
+import Firebase
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     
@@ -43,7 +45,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         case (let cur as UINavigationController, let nxt as UINavigationController):
             let curRoot = cur.viewControllers.first
             let nxtRoot = nxt.viewControllers.first
-            return (curRoot is LoginViewController) && (nxtRoot is LoginViewController)
+            return ((curRoot is LoginViewController) && (nxtRoot is LoginViewController))
+            || ((curRoot is VerifyEmailViewController) && (nxtRoot is VerifyEmailViewController))
         default:
             return false
         }
@@ -81,6 +84,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let win = UIWindow(windowScene: windowScene)
         window = win
         
+        let bg = GradientBackgroundView()
+        bg.frame = win.bounds
+        bg.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        bg.isUserInteractionEnabled = false
+        
+        win.addSubview(bg)
+        win.sendSubviewToBack(bg)
+        
         // 2) Apply the theme
         ThemeManager.shared.applyInitialTheme(for: win)
         
@@ -105,8 +116,25 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let delegate = windowScene.delegate as? SceneDelegate,
               let window = delegate.window else { return }
+
+        if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") == false {
+            safelySetRoot(OnboardingViewController(), on: window)
+            return
+        }
+
+        if AuthService.isSignedIn(), let user = Auth.auth().currentUser {
+            if AppFlags.requireEmailVerification && user.isEmailVerified == false {
+                let email = user.email ?? ""
+                let nav = UINavigationController(rootViewController: VerifyEmailViewController(email: email))
+                safelySetRoot(nav, on: window)
+                return
+            }
+        }
+
         safelySetRoot(makeMainTabBar(), on: window)
     }
+
+    
     
     static func switchToLogin() {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
@@ -116,11 +144,18 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let rootVC: UIViewController
         if UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") == false {
             rootVC = OnboardingViewController()
-        } else if AuthService.isSignedIn() {
-            rootVC = makeMainTabBar()
+        } else if AuthService.isSignedIn(), let user = Auth.auth().currentUser {
+            if AppFlags.requireEmailVerification && user.isEmailVerified == false {
+                let email = user.email ?? ""
+                rootVC = UINavigationController(rootViewController: VerifyEmailViewController(email: email))
+            } else {
+                rootVC = makeMainTabBar()
+            }
+            
         } else {
             rootVC = UINavigationController(rootViewController: LoginViewController())
         }
+        
         
         safelySetRoot(rootVC, on: window)
     }

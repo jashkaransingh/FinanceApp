@@ -57,21 +57,24 @@ final class DataService {
         period: String? = nil,
         completion: @escaping (Result<[Transaction], NetworkError>) -> Void
     ) {
-        let scenarioURLString = "\(Environment.baseURL)/test/scenario/college_student"
-        
-        guard let url = URL(string: scenarioURLString) else {
-            completion(.failure(.badURL))
-            return
+        var queries: [String: String] = [:]
+
+        if let period {
+            queries["period"] = period
+        } else {
+            if let startDate { queries["start_date"] = startDate }
+            if let endDate   { queries["end_date"]   = endDate }
         }
-        
+
         NetworkService.getJSON(
-            from: url,
-            queries: [:],
+            from: API.transactions.url,
+            queries: queries.isEmpty ? nil : queries,
             decodeTo: TransactionsResponse.self
         ) { result in
             completion(result.map { $0.transactions })
         }
     }
+
     
     // MARK: - AI Functions
     
