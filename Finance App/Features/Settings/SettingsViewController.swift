@@ -37,7 +37,6 @@ class SettingsViewController: UIViewController {
         }
     }
     
-    // --- UI Components ---
     private lazy var profileHeaderView = ProfileHeaderView()
     
     private lazy var appLockRow = SettingsRowView(
@@ -47,6 +46,7 @@ class SettingsViewController: UIViewController {
         accessoryType: .aSwitch(
             isOn: UserDefaults.standard.bool(forKey: SettingsKeys.isAppLockEnabled),
             action: { [weak self] isOn in
+                HapticsManager.trigger(.heavy)
                 self?.handleAppLockToggled(wantsToEnable: isOn)
             }
         )
@@ -181,6 +181,20 @@ class SettingsViewController: UIViewController {
     
     private func setupActions() {
         
+        [
+                appLockRow,
+                bankConnectionsRow,
+                notificationsRow,
+                appearanceRow,
+                versionRow,
+                termsRow,
+                privacyRow,
+                reportBugRow,
+                signOutRow
+            ].forEach { row in
+                row.addTarget(self, action: #selector(settingsRowPressed), for: .touchDown)
+            }
+        
         appLockRow.addTarget(self, action: #selector(appLockRowTapped), for: .touchUpInside)
         bankConnectionsRow.addTarget(self, action: #selector(bankConnectionsTapped), for: .touchUpInside)
         notificationsRow.addTarget(self, action: #selector(notificationsTapped), for: .touchUpInside)
@@ -252,7 +266,12 @@ class SettingsViewController: UIViewController {
     
     // MARK: - Actions
     
+    @objc private func settingsRowPressed() {
+        HapticsManager.trigger(.heavy) // or .medium
+    }
+    
     @objc private func profileCardTapped() {
+        HapticsManager.trigger(.heavy)
         let vc = ProfileSettingsViewController(style: .insetGrouped)
         navigationController?.pushViewController(vc, animated: true)
     }

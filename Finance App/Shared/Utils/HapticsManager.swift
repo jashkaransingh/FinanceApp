@@ -17,23 +17,39 @@ enum HapticType {
     case selection
 }
 
-struct HapticsManager {
+enum HapticsManager {
+
+    // Keep generators alive (less lag)
+    private static let notification = UINotificationFeedbackGenerator()
+    private static let selection = UISelectionFeedbackGenerator()
+    private static let light = UIImpactFeedbackGenerator(style: .light)
+    private static let medium = UIImpactFeedbackGenerator(style: .medium)
+    private static let heavy = UIImpactFeedbackGenerator(style: .heavy)
+
+    static func prepare() {
+        DispatchQueue.main.async {
+            notification.prepare()
+            selection.prepare()
+            light.prepare()
+            medium.prepare()
+            heavy.prepare()
+        }
+    }
+
     static func trigger(_ type: HapticType) {
-        switch type {
-        case .success:
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-        case .warning:
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
-        case .error:
-            UINotificationFeedbackGenerator().notificationOccurred(.error)
-        case .light:
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        case .medium:
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        case .heavy:
-            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-        case .selection:
-            UISelectionFeedbackGenerator().selectionChanged()
+        DispatchQueue.main.async {
+            // Prepare right before firing for best feel
+            prepare()
+
+            switch type {
+            case .success: notification.notificationOccurred(.success)
+            case .warning: notification.notificationOccurred(.warning)
+            case .error:   notification.notificationOccurred(.error)
+            case .light:   light.impactOccurred()
+            case .medium:  medium.impactOccurred()
+            case .heavy:   heavy.impactOccurred()
+            case .selection: selection.selectionChanged()
+            }
         }
     }
 }

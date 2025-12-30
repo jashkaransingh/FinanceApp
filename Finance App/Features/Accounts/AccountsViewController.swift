@@ -442,7 +442,7 @@ final class AccountsViewController: UIViewController {
                          case .success(let transactions):
                              transactionCompletion(transactions) // Send transactions to the next step
                          case .failure(let error):
-                            print("❌ Failed to load transactions for Budget AI: \(error)")
+                            print("Failed to load transactions for Budget AI: \(error)")
                             // TODO: Show a real alert to the user
                          }
                     }
@@ -454,7 +454,7 @@ final class AccountsViewController: UIViewController {
             case .success:
                 // --- FLOW A: PLAN EXISTS ---
                 // We have a plan. Load transactions and go *directly* to the assistant.
-                print("✅ Found existing budget plan. Loading transactions...")
+                print("Found existing budget plan. Loading transactions...")
                 transactionLoader { transactions in
                     let vc = BudgetAssistantViewController(
                         transactions: transactions,

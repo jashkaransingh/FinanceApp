@@ -21,4 +21,9 @@ extension UITextField {
         (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
+extension UIView {
+    func allSubviewsRecursive() -> [UIView] {
+        subviews + subviews.flatMap { $0.allSubviewsRecursive() }
+    }
+}
 

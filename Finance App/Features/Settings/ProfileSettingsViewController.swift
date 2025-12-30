@@ -76,6 +76,19 @@ final class ProfileSettingsViewController: UITableViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         gradientBackground.pauseAnimation()
+        
+        // Heavy haptic when user leaves this screen via back / swipe back / dismiss
+            guard isMovingFromParent || isBeingDismissed else { return }
+
+            if let tc = transitionCoordinator {
+                tc.animate(alongsideTransition: nil) { context in
+                    if !context.isCancelled {
+                        HapticsManager.trigger(.heavy)
+                    }
+                }
+            } else {
+                HapticsManager.trigger(.heavy)
+            }
     }
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
@@ -145,6 +158,8 @@ final class ProfileSettingsViewController: UITableViewController {
         // Handlers
         formView.onChangePassword = { [weak self] in
             guard let self = self else { return }
+            
+            HapticsManager.trigger(.heavy)
 
             let emailFromForm = self.formView.email
             let prefill = emailFromForm.isEmpty ? Auth.auth().currentUser?.email : emailFromForm
@@ -255,6 +270,7 @@ final class ProfileSettingsViewController: UITableViewController {
     }
     
     @objc private func deleteAccountTapped() {
+        HapticsManager.trigger(.warning)
         navigationController?.pushViewController(DeleteAccountViewController(), animated: true)
     }
     
@@ -268,6 +284,7 @@ final class ProfileSettingsViewController: UITableViewController {
     }
     
     @objc private func cancelTapped() {
+        HapticsManager.trigger(.heavy)
         formView.configure(name: initialName, email: initialEmail, isEmailVerified: true)
         isEditingProfile = false
         formView.setEditing(false)
@@ -282,6 +299,7 @@ final class ProfileSettingsViewController: UITableViewController {
     }
     
     @objc private func saveTapped() {
+        HapticsManager.trigger(.heavy)
         view.endEditing(true)
         let newName = formView.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !newName.isEmpty else {

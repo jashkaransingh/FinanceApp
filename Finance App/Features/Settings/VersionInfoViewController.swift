@@ -324,41 +324,41 @@ extension VersionInfoViewController {
     static func presentCompact(from presenter: UIViewController) {
         let vc = VersionInfoViewController()
         vc.modalPresentationStyle = .pageSheet
-        vc.loadViewIfNeeded()
-        
+
         if let sheet = vc.sheetPresentationController {
             sheet.prefersGrabberVisible = false
-            
+            sheet.prefersScrollingExpandsWhenScrolledToEdge = false
+
             if #available(iOS 16.0, *) {
-                let width = presenter.view.window?.bounds.width ?? UIScreen.main.bounds.width
-                
-                vc.loadViewIfNeeded()
-                vc.view.bounds.size.width = width
-                vc.view.setNeedsLayout()
-                vc.view.layoutIfNeeded()
-                
-                let h = vc.compactHeight(for: width)
                 let id = UISheetPresentationController.Detent.Identifier("fit")
-                
-                let detent = UISheetPresentationController.Detent.custom(identifier: id) { context in
-                    min(h, context.maximumDetentValue - 12)
+
+                let detent = UISheetPresentationController.Detent.custom(identifier: id) { [weak vc] context in
+                    guard let vc else { return 300 }
+
+                    // Use the REAL presented width if available
+                    let width = vc.view.bounds.width > 0
+                        ? vc.view.bounds.width
+                        : (presenter.view.bounds.width)
+
+                    let contentH = vc.compactHeight(for: width)
+
+                    // Small breathing room prevents 1px clipping on some devices
+                    let padded = contentH + 8
+
+                    return min(padded, context.maximumDetentValue - 12)
                 }
-                
+
                 sheet.detents = [detent]
                 sheet.selectedDetentIdentifier = id
-                
-                // Helps prevent “scroll to expand” behavior if Apple treats something as scrollable later
-                sheet.prefersScrollingExpandsWhenScrolledToEdge = false
-            }else if #available(iOS 15.0, *) {
+            } else if #available(iOS 15.0, *) {
                 sheet.detents = [.medium()]
                 sheet.selectedDetentIdentifier = .medium
             }
         }
-        
+
         presenter.present(vc, animated: true)
     }
 }
-
 
 
 // MARK: - Styling helpers

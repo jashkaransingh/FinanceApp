@@ -31,6 +31,8 @@ class BaseAuthViewController: UIViewController, UITextFieldDelegate {
     private let socialButtonsHeight: CGFloat = 50
     private var separatorHeightConstraint: NSLayoutConstraint!
     private var socialButtonsHeightConstraint: NSLayoutConstraint!
+    private var didInstallTapHaptics = false
+    var defaultTapHaptic: HapticType { .heavy }
     
     
     // MARK: - UI
@@ -98,6 +100,8 @@ class BaseAuthViewController: UIViewController, UITextFieldDelegate {
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        
+        installTapHapticsIfNeeded()
         
         configureTextFieldNavigation()
         
@@ -178,7 +182,18 @@ class BaseAuthViewController: UIViewController, UITextFieldDelegate {
     }
     
     
-    // MARK: - Keyboard + navigation helpers
+    // MARK: - haptics, Keyboard,  navigation helpers
+    private func installTapHapticsIfNeeded() {
+        guard !didInstallTapHaptics else { return }
+        didInstallTapHaptics = true
+
+        // Find all UIControls in the screen and attach a haptic on tap.
+        for control in view.allSubviewsRecursive().compactMap({ $0 as? UIControl }) {
+            if control is UITextField { continue }   // <- don’t haptic on typing
+            control.addTarget(self, action: #selector(handleDefaultTapHaptic), for: .touchUpInside)
+        }
+    }
+    
     private func setupKeyboardDismissal() {
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTapOutside))
         tap.cancelsTouchesInView = false
@@ -273,6 +288,10 @@ class BaseAuthViewController: UIViewController, UITextFieldDelegate {
     
     @objc private func handleTapOutside() {
         view.endEditing(true)
+    }
+    
+    @objc private func handleDefaultTapHaptic() {
+        HapticsManager.trigger(defaultTapHaptic)
     }
     
     // MARK: - Loading + alerts
